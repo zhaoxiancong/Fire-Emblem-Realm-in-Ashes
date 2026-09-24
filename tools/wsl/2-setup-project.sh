@@ -173,20 +173,57 @@ step "2. 克隆 FE8 扩展框架"
 
 mkdir -p "$WORK_DIR"
 
+# 子模块（tools/gbagfx 等）走 GitHub，国内直连必挂 —— 先挂上代理
+if [ -n "${https_proxy:-}" ]; then
+  git config --global http.proxy "$https_proxy" 2>/dev/null || true
+  git config --global https.proxy "$https_proxy" 2>/dev/null || true
+  ok "已为 git 配置代理：$https_proxy"
+fi
+
 if [ -d "$FRAMEWORK_DIR/.git" ]; then
   ok "框架已存在：$FRAMEWORK_DIR"
   read -r -p "是否更新到最新？(y/N) " upd
   if [ "$upd" = "y" ] || [ "$upd" = "Y" ]; then
     git -C "$FRAMEWORK_DIR" pull --ff-only || warn "更新失败，继续用现有版本"
-    git -C "$FRAMEWORK_DIR" submodule update --init --recursive
   fi
 else
   echo "克隆到 $FRAMEWORK_DIR ..."
-  git clone --recursive "$FRAMEWORK_REPO" "$FRAMEWORK_DIR"
-  ok "克隆完成"
+  git clone "$FRAMEWORK_REPO" "$FRAMEWORK_DIR"
+  ok "主仓库克隆完成"
 fi
 
+# ---- 子模块：单独拉 + 强制校验（clone --recursive 会静默失败，是最常见的构建失败根因）----
+echo "拉取子模块（国内网络下这一步最容易静默失败）..."
+git -C "$FRAMEWORK_DIR" submodule sync --recursive >/dev/null 2>&1 || true
+if ! git -C "$FRAMEWORK_DIR" submodule update --init --recursive --depth 1; then
+  warn "浅拉取失败，回退为完整拉取..."
+  git -C "$FRAMEWORK_DIR" submodule update --init --recursive || true
+fi
+
+# ---- 校验：列出仍处于未初始化状态的子模块 ----
 cd "$FRAMEWORK_DIR"
+missing_sub="$(git submodule status --recursive 2>/dev/null | grep -E '^-' || true)"
+if [ -n "$missing_sub" ]; then
+  err "以下子模块未初始化（前面带 '-' 号）："
+  echo "$missing_sub" | sed 's/^/    /'
+  cat <<'EOT'
+
+  这会导致构建报 "can't open tools/gbagfx/gbagfx.s" 之类的错误。
+  请先修复网络后重跑，或手动执行：
+    git config --global http.proxy http://127.0.0.1:7897
+    git submodule update --init --recursive
+  若子模块用 git:// 协议（代理不生效），改走 HTTPS：
+    git config --global url."https://github.com/".insteadOf "git://github.com/"
+    git config --global url."https://github.com/".insteadOf "git@github.com:"
+    git submodule sync --recursive && git submodule update --init --recursive
+
+EOT
+  read -r -p "  仍要继续构建？(y/N) " cont_sub
+  case "$cont_sub" in y|Y) ;; *) err "已中止。修复子模块后重跑本脚本。"; exit 1 ;; esac
+else
+  ok "子模块完整（$(git submodule status --recursive 2>/dev/null | wc -l) 个）"
+fi
+
 ok "工作目录：$(pwd)"
 
 # ---------- 2. 安装依赖 ----------
