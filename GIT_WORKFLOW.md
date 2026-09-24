@@ -63,7 +63,7 @@ chore(流程): 新增 .gitignore 与提交规范
 
 ## 4. 自动推送钩子（一次安装，永久生效）
 
-仓库内带了 `post-commit` 钩子，**每次 `git commit` 成功后自动 `git push`**，把「必推送」从人肉纪律变成机械动作。
+仓库内带了 `post-commit` 钩子，**每次 `git commit` 成功后自动 `git push`**，把「必推送」从人肉纪律变成机械动作。（本机已启用。）
 
 ```bash
 # 安装（每个克隆执行一次）
@@ -109,16 +109,38 @@ git push origin main
 - [ ] 跨文档引用没写死绝对路径（一律用相对路径，如 `docs/3.游戏数值设定.md`）
 - [ ] 数值类改动只改 `3.游戏数值设定.md`，没在设计文档里复制数值
 
-## 7. 凭据
+## 7. 凭据（已配置 PAT 静默鉴权）
 
-Push 走 Git Credential Manager。若推送报 `Authentication failed`：
+本机已用 Personal Access Token 完成鉴权，推送全程无弹窗。Token 存在 Windows 凭据库中，不落盘到仓库。
+
+### 若换机器 / token 过期
+
+1. GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)** → Generate new token，勾选 `repo`。
+2. 写入本机凭据库（token 从 stdin 读，不会留在命令行历史里）：
 
 ```bash
-git credential-manager github login   # 或
-git credential-manager erase https://github.com   # 清掉旧凭据后重来
+printf 'protocol=https\nhost=github.com\nusername=zhaoxiancong\npassword=你的TOKEN\n' | git credential-manager store --no-ui
 ```
 
-也可在 GitHub → Settings → Developer settings → Personal access tokens 生成 classic token（`repo` 权限），推送时用户名填 GitHub 账号、密码填 token。
+3. 验证：`git push origin main` 应立刻返回 `Everything up-to-date`，无弹窗。
+
+### 已知坑：推送无限卡住 / 反复弹登录窗
+
+**症状**：`git push` 一直不返回，或反复弹出 GitHub 登录窗口。
+
+**原因**：PortableGit 的 system 配置默认 `credential.helper=helper-selector`，它在无人值守环境（无 TTY）会尝试弹 UI 并死等。
+
+**修复**（已在本机执行过）：
+
+```bash
+# 1. 把 system 级的 selector 换成标准的 GCM
+rm -f "<PortableGit>/etc/gitconfig.lock"   # 先清掉残留锁，否则改配置报 "File exists"
+git config --system credential.helper manager
+
+# 2. 写入 PAT（见上）
+```
+
+排查时可用 `GIT_TERMINAL_PROMPT=0 timeout 45 git push origin main` 让失败快速暴露，而不是无限等待。
 
 ## 8. 敏感信息
 
