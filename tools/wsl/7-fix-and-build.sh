@@ -101,16 +101,50 @@ if [ "$GBAGFX_OK" -eq 0 ]; then
   fi
 
   # 2.2 上游是否跟踪该路径
-  tracked="$(git ls-tree -r HEAD --name-only 2>/dev/null | grep -i gbagfx | head -20)"
+  tracked="$(git ls-tree -r HEAD --name-only 2>/dev/null | grep -i '^tools/gbagfx/' | head -40)"
   if [ -n "$tracked" ]; then
-    warn "→ 上游仓库跟踪了这些路径，但本地缺失（工作区不完整）："
+    warn "→ 上游仓库跟踪了 tools/gbagfx/ 下这些文件，但本地缺失（工作区不完整）："
     echo "$tracked" | sed 's/^/         /'
     echo ""
-    info "尝试从 git 恢复被删的跟踪文件..."
-    git checkout -- . 2>/dev/null && ok "已执行 git checkout -- ."
-    git status --short | head -10 | sed 's/^/         /'
+    info "逐个比对本地缺失文件："
+    missing_cnt=0
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if [ ! -e "$f" ]; then
+        printf "         %s缺 %s%s\n" "$c_red" "$f" "$c_off"
+        missing_cnt=$((missing_cnt + 1))
+      fi
+    done <<< "$tracked"
+    info "共缺失 $missing_cnt 个文件"
+
+    echo ""
+    info "执行强制重检出（三级递进，直到文件回来）："
+    # 一级：普通 checkout
+    git checkout HEAD -- tools/gbagfx/ 2>/dev/null
+    if [ -e "tools/gbagfx/Makefile" ]; then
+      ok "一级 checkout 生效"
+    else
+      info "一级无效 → 二级：restore --staged --worktree"
+      git restore --source=HEAD --staged --worktree tools/gbagfx/ 2>/dev/null
+      if [ -e "tools/gbagfx/Makefile" ]; then
+        ok "二级 restore 生效"
+      else
+        info "二级无效 → 三级：清除 skip-worktree/assume-unchanged 标记后重来"
+        git ls-files -v tools/gbagfx/ 2>/dev/null | awk '/^[a-zS]/ {print $2}' | while read -r p; do
+          [ -n "$p" ] && git update-index --no-skip-worktree --no-assume-unchanged "$p" 2>/dev/null
+        done
+        git checkout HEAD -- tools/gbagfx/ 2>/dev/null
+        [ -e "tools/gbagfx/Makefile" ] && ok "三级生效" || err "三级仍失败"
+      fi
+    fi
+
+    echo ""
+    info "重检出后 tools/gbagfx/ 内容："
+    ls -la tools/gbagfx/ 2>/dev/null | head -25 | sed 's/^/         /' || info "（目录仍不存在）"
   else
-    warn "→ 上游 HEAD 未跟踪任何 gbagfx 路径"
+    warn "→ 上游 HEAD 未跟踪 tools/gbagfx/ 下任何文件"
+    info "  上游实际跟踪的 gbagfx 相关路径（可能有大小写或位置差异）："
+    git ls-tree -r HEAD --name-only 2>/dev/null | grep -i gbagfx | head -20 | sed 's/^/         /' || info "  （无）"
   fi
 
   # 2.3 tools/ 实况
