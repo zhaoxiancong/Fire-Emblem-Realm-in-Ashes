@@ -29,16 +29,19 @@ mkdir -p "$LOG_DIR"
 BUILD_LOG="$LOG_DIR/build-$(date +%Y%m%d-%H%M%S).log"
 
 # ---------- 工具函数 ----------
-c_cyan='\033[0;36m'; c_green='\033[0;32m'; c_yellow='\033[1;33m'; c_red='\033[0;31m'; c_off='\033[0m'
-step() { printf "\n${c_cyan}=== %s ===${c_off}\n" "$1"; }
-ok()   { printf "${c_green}[OK] %s${c_off}\n" "$1"; }
-warn() { printf "${c_yellow}[!] %s${c_off}\n" "$1"; }
-err()  { printf "${c_red}[X] %s${c_off}\n" "$1"; }
+# 注意：$'...' 让 \033 成为真正的 ESC 字节，否则 heredoc/echo 会原样打印 "\033[0;32m"
+c_cyan=$'\033[0;36m'; c_green=$'\033[0;32m'; c_yellow=$'\033[1;33m'; c_red=$'\033[0;31m'; c_off=$'\033[0m'
+step() { printf "\n%s=== %s ===%s\n" "$c_cyan" "$1" "$c_off"; }
+ok()   { printf "%s[OK] %s%s\n" "$c_green" "$1" "$c_off"; }
+warn() { printf "%s[!] %s%s\n" "$c_yellow" "$1" "$c_off"; }
+err()  { printf "%s[X] %s%s\n" "$c_red" "$1" "$c_off"; }
 
 # 带日志留档的命令执行：stdout/stderr 既上屏又写文件
+# 用 process substitution 而非管道，避免 PIPESTATUS 依赖与输出缓冲错序
 run_logged() {
-  "$@" 2>&1 | tee -a "$BUILD_LOG"
-  return "${PIPESTATUS[0]}"
+  local rc=0
+  "$@" > >(tee -a "$BUILD_LOG") 2>&1 || rc=$?
+  return "$rc"
 }
 export BUILD_LOG
 
@@ -248,38 +251,52 @@ step "5. 构建中文版 ROM（32M）"
 echo "配置：locales=$LOCALES, rom-size=$ROM_SIZE"
 
 configure_ok=0
-if ./configure --with-enabled-locales="$LOCALES" --with-default-locale=zh-Hans \
-     --with-rom-size="$ROM_SIZE" 2>&1 | tee -a "$BUILD_LOG" | tail -20; then
-  configure_ok=1
-fi
+set +e
+./configure --with-enabled-locales="$LOCALES" --with-default-locale=zh-Hans \
+  --with-rom-size="$ROM_SIZE" 2>&1 | tee -a "$BUILD_LOG" | tail -25
+[ "${PIPESTATUS[0]}" -eq 0 ] && configure_ok=1
+set -e
 
-if [ "$configure_ok" -eq 1 ] && grep -qE '^(all:|[a-zA-Z0-9_-]+:)' Makefile 2>/dev/null; then
+zh_rc=1
+if [ "$configure_ok" -eq 1 ]; then
   ok "configure 完成，开始构建中文版"
   set +e
   run_logged make -j"$(nproc)"
-  rc=$?
+  zh_rc=$?
   set -e
-  [ "$rc" -eq 0 ] && ok "中文版构建完成" || warn "中文版 make 返回 $rc"
+  [ "$zh_rc" -eq 0 ] && ok "中文版构建完成" || warn "中文版 make 返回 $zh_rc"
 else
-  warn "configure 可能不支持这些参数（中国大陆网络下报错也可能是子模块拉取失败）"
+  warn "configure 失败（返回非 0）"
   echo "    不会自动降级——请先把上面的 configure 输出（已存 $BUILD_LOG）反馈，再决定走哪条路。"
-  echo "    若确认要改用命名 profile，手动执行："
+  echo "    若确认只是参数不支持，手动改用命名 profile："
   echo "      make expansion-modern-localization-profile-en-zh-hans"
   echo "      make expansion-modern-boot-check"
 fi
 
 # ---------- 5. 结果 ----------
 step "6. 构建产物"
-find build -name '*.gba' -exec ls -lh {} \; 2>/dev/null || echo "（未找到 .gba）"
+gba_list="$(find build -name '*.gba' 2>/dev/null || true)"
+if [ -n "$gba_list" ]; then
+  echo "$gba_list" | while read -r f; do ls -lh "$f"; done
+else
+  echo "（未找到 .gba）"
+fi
 
 echo ""
 echo "构建日志：$BUILD_LOG"
 
-cat <<EOF
+# ============ 终局判定：有产物才算成功 ============
+failed=0
+[ "$rc" -ne 0 ] && failed=1
+[ "$zh_rc" -ne 0 ] && failed=1
+[ -z "$gba_list" ] && failed=1
 
-${c_green}============================================${c_off}
-${c_green}  环境搭建完成${c_off}
-${c_green}============================================${c_off}
+if [ "$failed" -eq 0 ]; then
+  cat <<EOF
+
+============================================
+  环境搭建完成
+============================================
 
 接下来：
 
@@ -300,5 +317,30 @@ ${c_green}============================================${c_off}
    见工程手册 §5.1 与 §8 待办
 
 EOF
+  ok "全部完成"
+  exit 0
+else
+  cat <<EOF
 
-ok "全部完成"
+============================================
+  环境搭建【未完成】—— 构建失败
+============================================
+
+  make 返回码：$rc       中文版 make 返回码：$zh_rc
+  产物是否存在：$([ -n "$gba_list" ] && echo 是 || echo 否)
+
+  请按下面顺序排查，并把对应输出一并反馈：
+
+  1) 找错误行
+     grep -nE "error:|Error [0-9]|fatal error|undefined reference" "$BUILD_LOG" | head -40
+
+  2) 检查子模块是否拉全（前面带 '-' 的即为缺失）
+     cd ~/projects/fireemblem8-expansion && git submodule status
+
+  3) 看构建尾部原始输出
+     tail -60 "$BUILD_LOG"
+
+EOF
+  err "环境搭建未完成，请勿视为成功"
+  exit 1
+fi
