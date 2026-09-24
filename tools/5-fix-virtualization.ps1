@@ -14,11 +14,18 @@
 #   powershell -ExecutionPolicy Bypass -File "...\5-fix-virtualization.ps1"
 #   powershell -ExecutionPolicy Bypass -File "...\5-fix-virtualization.ps1" -DiagnoseOnly
 #   powershell -ExecutionPolicy Bypass -File "...\5-fix-virtualization.ps1" -Toggle
+#   powershell -ExecutionPolicy Bypass -File "...\5-fix-virtualization.ps1" -RepairImage
+#
+# 已知关键场景（Windows 11 家庭版实测）：
+#   「虚拟机平台」功能状态显示"已启用"，但 System32\vmcompute.exe 根本不在盘上
+#   —— FOD（按需功能）负载下载失败。此时必然报 HCS_E_SERVICE_NOT_AVAILABLE。
+#   官方建议：先装完所有 Windows 更新，再启用该功能。
 # ============================================================
 
 param(
     [switch]$DiagnoseOnly,
-    [switch]$Toggle
+    [switch]$Toggle,
+    [switch]$RepairImage
 )
 
 $ErrorActionPreference = 'Continue'
@@ -55,6 +62,7 @@ if (-not (Test-Admin)) {
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
     if ($DiagnoseOnly) { $argList += '-DiagnoseOnly' }
     if ($Toggle)       { $argList += '-Toggle' }
+    if ($RepairImage)  { $argList += '-RepairImage' }
     try { Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $argList }
     catch { Write-Err2 "提权失败：$($_.Exception.Message)"; Read-Host "按回车退出" }
     exit
@@ -96,7 +104,7 @@ if ($cpu.VirtualizationFirmwareEnabled -eq $false) {
 Write-Step "2. 可选功能状态"
 
 $featureState = @{}
-foreach ($feat in @('VirtualMachinePlatform', 'Microsoft-Windows-Subsystem-Linux', 'Microsoft-Hyper-V')) {
+foreach ($feat in @('VirtualMachinePlatform', 'Microsoft-Windows-Subsystem-Linux', 'HypervisorPlatform', 'Microsoft-Hyper-V')) {
     $res = Invoke-Native 'dism.exe' @('/online', '/get-featureinfo', "/featurename:$feat")
     $joined = ($res.Output | ForEach-Object { "$_" }) -join "`n"
     $state = '(未识别)'
@@ -117,6 +125,30 @@ foreach ($s in @('vmcompute', 'HvHost', 'WslService', 'vmms', 'CimFS')) {
     } else {
         Write-Host ("  {0,-14} (不存在)" -f $s) -ForegroundColor Red
     }
+}
+
+Write-Step "3.1 虚拟化核心文件是否真的在盘上（关键判据）"
+
+# 功能显示"已启用" ≠ 文件已安装。Windows 11 家庭版常见：功能状态是"已启用"，
+# 但 FOD（按需功能）负载没下载成功，vmcompute.exe 实际缺失 —— 此时必然报 HCS 不可用。
+$coreFiles = @(
+    (Join-Path $env:SystemRoot 'System32\vmcompute.exe'),
+    (Join-Path $env:SystemRoot 'System32\vmcompute.dll'),
+    (Join-Path $env:SystemRoot 'System32\drivers\vid.sys'),
+    (Join-Path $env:SystemRoot 'System32\WinHvPlatform.dll'),
+    (Join-Path $env:SystemRoot 'System32\vmwp.exe')
+)
+$missingCore = @()
+foreach ($f in $coreFiles) {
+    if (Test-Path $f) {
+        Write-Host "  存在  $(Split-Path $f -Leaf)" -ForegroundColor Green
+    } else {
+        Write-Host "  缺失  $(Split-Path $f -Leaf)" -ForegroundColor Red
+        $missingCore += (Split-Path $f -Leaf)
+    }
+}
+if ($missingCore -contains 'vmcompute.exe') {
+    Write-Err2 "  vmcompute.exe 不在盘上！虚拟机平台功能虽显示已启用，但负载（FOD）没装上。"
 }
 
 Write-Step "4. hypervisor 启动开关（bcdedit）"
@@ -159,12 +191,22 @@ if ($pendingCount -gt 200) {
 Write-Step "6. 诊断结论"
 
 $vmcompute = Get-Service -Name 'vmcompute' -ErrorAction SilentlyContinue
-$ready = ($null -ne $vmcompute) -and $cs.HypervisorPresent
+$vmcomputeExe = Test-Path (Join-Path $env:SystemRoot 'System32\vmcompute.exe')
+$ready = ($null -ne $vmcompute) -and $cs.HypervisorPresent -and $vmcomputeExe
 
 if ($ready) {
     Write-Ok "虚拟化层已就绪！可以直接运行 4-install-wsl-manual.ps1 导入发行版。"
 } else {
-    Write-Err2 "虚拟化层未就绪：vmcompute=$(if($vmcompute){'存在'}else{'缺失'})，HypervisorPresent=$($cs.HypervisorPresent)"
+    Write-Err2 "虚拟化层未就绪："
+    Write-Host "    vmcompute.exe 在盘上 = $vmcomputeExe"
+    Write-Host "    vmcompute 服务       = $(if($vmcompute){'存在'}else{'缺失'})"
+    Write-Host "    HypervisorPresent    = $($cs.HypervisorPresent)"
+    if (-not $vmcomputeExe) {
+        Write-Host ""
+        Write-Warn2 "关键：功能状态是「已启用」，但 vmcompute.exe 根本没装 —— 这是 FOD（按需功能）负载"
+        Write-Warn2 "下载失败导致的。Windows 11 家庭版上这是已知问题。"
+        Write-Host "    微软官方对同场景的答复：先装完所有 Windows 更新，再启用虚拟机平台。" -ForegroundColor Yellow
+    }
 }
 
 if ($DiagnoseOnly) {
@@ -219,6 +261,46 @@ if ($wslState -match '已启用' -and $wslState -notmatch '挂起') {
     $r = Invoke-Native 'dism.exe' @('/online', '/enable-feature', '/featurename:Microsoft-Windows-Subsystem-Linux', '/all', '/norestart')
     if ($r.Code -in @(0, 3010)) { Write-Ok "WSL 组件已启用（待重启生效）"; $needReboot = $true }
     else { Write-Err2 "启用失败（rc=$($r.Code)）" }
+}
+
+# 7.4 虚拟机监控程序平台（第三方虚拟化 API，装了无害，且是常见的漏项）
+$hpState = $featureState['HypervisorPlatform']
+if ($hpState -match '已启用' -and $hpState -notmatch '挂起') {
+    Write-Ok "虚拟机监控程序平台已启用"
+} else {
+    Write-Host "  虚拟机监控程序平台当前：$hpState，正在启用 ..."
+    $r = Invoke-Native 'dism.exe' @('/online', '/enable-feature', '/featurename:HypervisorPlatform', '/all', '/norestart')
+    if ($r.Code -in @(0, 3010)) { Write-Ok "虚拟机监控程序平台已启用（待重启生效）"; $needReboot = $true }
+    else { Write-Warn2 "启用失败（rc=$($r.Code)），该项非必需，可忽略" }
+}
+
+# 7.5 若 vmcompute.exe 仍缺失 → 说明 FOD 负载没装上，需要先修 Windows 更新
+if (-not (Test-Path (Join-Path $env:SystemRoot 'System32\vmcompute.exe'))) {
+    Write-Host ""
+    Write-Warn2 "vmcompute.exe 仍缺失 —— 功能状态是「已启用」但负载没装上（FOD 下载失败）。"
+    Write-Host ""
+    Write-Host "    按优先级处理：" -ForegroundColor Yellow
+    Write-Host "    ① 【首选】设置 → Windows 更新 → 检查更新 → 安装完所有更新 → 重启" -ForegroundColor Cyan
+    Write-Host "       （微软官方对该场景的答复就是这条；本机 PackagesPending=$pendingCount 项待处理）"
+    Write-Host "    ② 若更新装不上，检查网络能否连到 Microsoft（代理/TUN 设置）"
+    Write-Host "    ③ 仍不行则修组件存储（耗时较长，约 10~30 分钟）：" -ForegroundColor Cyan
+    Write-Host "       powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`" -RepairImage" -ForegroundColor Cyan
+}
+
+# 7.6 组件存储修复（-RepairImage）
+if ($RepairImage) {
+    Write-Step "7.6 修复组件存储（DISM / sfc，耗时较长请耐心等）"
+    Write-Host "  → Dism /Online /Cleanup-Image /ScanHealth"
+    Invoke-Native 'dism.exe' @('/Online', '/Cleanup-Image', '/ScanHealth') | Out-Null
+    Write-Host "  → Dism /Online /Cleanup-Image /CheckHealth"
+    Invoke-Native 'dism.exe' @('/Online', '/Cleanup-Image', '/CheckHealth') | Out-Null
+    Write-Host "  → Dism /Online /Cleanup-Image /RestoreHealth（最慢的一步）"
+    $r = Invoke-Native 'dism.exe' @('/Online', '/Cleanup-Image', '/RestoreHealth')
+    if ($r.Code -eq 0) { Write-Ok "RestoreHealth 完成" } else { Write-Warn2 "RestoreHealth 返回 $($r.Code)" }
+    Write-Host "  → sfc /scannow"
+    Invoke-Native 'sfc.exe' @('/scannow') | Out-Null
+    Write-Ok "组件存储修复流程执行完毕，请重启后再运行本脚本复查"
+    $needReboot = $true
 }
 
 # ============================================================
