@@ -4,13 +4,13 @@
 
 ## 0. 仓库信息
 
-| 项 | 值 |
-| --- | --- |
-| 远端 | `https://github.com/zhaoxiancong/Fire-Emblem-Realm-in-Ashes` |
-| 远端名 | `origin` |
-| 主分支 | `main`（唯一长期分支） |
-| 本地路径 | `D:\workbuddy\FireEmblem Realm-in-Ashes` |
-| 提交身份 | `Supreme <1507300057@qq.com>` |
+| 项    | 值                                                            |
+| ---- | ------------------------------------------------------------ |
+| 远端   | `https://github.com/zhaoxiancong/Fire-Emblem-Realm-in-Ashes` |
+| 远端名  | `origin`                                                     |
+| 主分支  | `main`（唯一长期分支）                                               |
+| 本地路径 | `D:\workbuddy\FireEmblem Realm-in-Ashes`                     |
+| 提交身份 | `Supreme <1507300057@qq.com>`                                |
 
 ## 1. 核心铁律
 
@@ -30,16 +30,16 @@
 
 ### type
 
-| type | 用途 |
-| --- | --- |
-| `docs` | 文档（设计文档 / 剧情 / 数值 / README） |
-| `feat` | 新功能（引擎代码、玩法系统） |
-| `fix` | 修复（Bug、数值错误、断链） |
-| `refactor` | 重构、结构调整（不改变行为） |
-| `chore` | 工程杂项（.gitignore、配置、依赖） |
-| `art` | 美术资源 |
-| `audio` | 音频资源 |
-| `test` | 测试 |
+| type       | 用途                          |
+| ---------- | --------------------------- |
+| `docs`     | 文档（设计文档 / 剧情 / 数值 / README） |
+| `feat`     | 新功能（引擎代码、玩法系统）              |
+| `fix`      | 修复（Bug、数值错误、断链）             |
+| `refactor` | 重构、结构调整（不改变行为）              |
+| `chore`    | 工程杂项（.gitignore、配置、依赖）      |
+| `art`      | 美术资源                        |
+| `audio`    | 音频资源                        |
+| `test`     | 测试                          |
 
 ### scope
 
@@ -122,7 +122,7 @@ git push origin main
 printf 'protocol=https\nhost=github.com\nusername=zhaoxiancong\npassword=你的TOKEN\n' | git credential-manager store --no-ui
 ```
 
-3. 验证：`git push origin main` 应立刻返回 `Everything up-to-date`，无弹窗。
+1. 验证：`git push origin main` 应立刻返回 `Everything up-to-date`，无弹窗。
 
 ### 已知坑：推送无限卡住 / 反复弹登录窗
 
