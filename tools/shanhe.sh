@@ -67,7 +67,7 @@ printf "  跑完后如需反馈，执行：%s cat %s %s\n" "$c_dim" "$REPORT" "$
 # ══════════════════════════════════════════
 # 1. 前置
 # ══════════════════════════════════════════
-H "1 / 7  前置检查"
+H "1 / 8  前置检查"
 
 if [ -d "$FRAMEWORK_DIR/.git" ]; then
   cd "$FRAMEWORK_DIR" || exit 1
@@ -87,7 +87,7 @@ fi
 # ══════════════════════════════════════════
 # 2. 代理
 # ══════════════════════════════════════════
-H "2 / 7  网络与代理"
+H "2 / 8  网络与代理"
 
 PROXY_OK=0
 for p in "${https_proxy:-}" "http://127.0.0.1:${CLASH_PORT}" "http://$(ip route show default 2>/dev/null | awk '{print $3}' | head -1):${CLASH_PORT}"; do
@@ -108,7 +108,7 @@ export NO_PROXY="$no_proxy"
 # ══════════════════════════════════════════
 # 3. 工作区完整性 —— 差集法（核心）
 # ══════════════════════════════════════════
-H "3 / 7  工作区完整性（上游 vs 本地差集）"
+H "3 / 8  工作区完整性（上游 vs 本地差集）"
 
 git rev-parse HEAD >/dev/null 2>&1 || { bad "不是有效的 git 仓库"; exit 1; }
 
@@ -176,7 +176,7 @@ rm -f "$UP" "$LO"
 # ══════════════════════════════════════════
 # 4. 关键构建依赖
 # ══════════════════════════════════════════
-H "4 / 7  构建依赖"
+H "4 / 8  构建依赖"
 
 need_install=0
 for t in arm-none-eabi-gcc arm-none-eabi-as arm-none-eabi-ld arm-none-eabi-objcopy make python3 git; do
@@ -203,7 +203,7 @@ fi
 # ══════════════════════════════════════════
 # 5. 子模块（若确实存在）
 # ══════════════════════════════════════════
-H "5 / 7  子模块"
+H "5 / 8  子模块"
 
 if [ -f .gitmodules ]; then
   dim ".gitmodules 声明的子模块："
@@ -271,9 +271,46 @@ else
 fi
 
 # ══════════════════════════════════════════
+# 5.5 构建宿主机工具（关键！框架的 Makefile 依赖链未覆盖它）
+# ══════════════════════════════════════════
+H "6 / 8  宿主机工具（tools/*）"
+
+# 框架的 Makefile 引用了 tools/gbagfx/gbagfx、tools/jsonproc/jsonproc 等可执行文件，
+# 但「如何构建它们」的规则没有挂进正常依赖链（只在 codeql-* 测试目标里出现）。
+# 缺了它们，make 会退化到内置隐式规则，报出 "can't open tools/gbagfx/gbagfx.s" 这类
+# 具有误导性的错误。所以必须在这里显式预构建。
+HOST_TOOLS="aif2pcm bin2c gbagfx jsonproc mid2agb preproc scaninc textencode"
+tool_missing=0
+
+for t in $HOST_TOOLS; do
+  [ -d "tools/$t" ] || continue
+  [ -f "tools/$t/Makefile" ] || continue
+  exe="tools/$t/$t"
+  if [ -x "$exe" ]; then
+    ok "$t"
+  else
+    dim "构建 $t …"
+    if make -C "tools/$t" >/dev/null 2>&1 && [ -x "$exe" ]; then
+      ok "$t（已构建）"
+    else
+      bad "$t 构建失败"
+      tool_missing=1
+    fi
+  fi
+done
+
+if [ "$tool_missing" -eq 0 ]; then
+  ok "宿主机工具齐备"
+else
+  warn "有工具构建失败，构建大概率会失败。手动排查："
+  raw "      cd $(pwd)"
+  raw "      for d in tools/*/; do make -C \"\$d\"; done"
+fi
+
+# ══════════════════════════════════════════
 # 6. 构建
 # ══════════════════════════════════════════
-H "6 / 7  构建"
+H "7 / 8  构建 ROM"
 
 gbas="$(find build -name '*.gba' 2>/dev/null | head -1)"
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
@@ -294,7 +331,7 @@ fi
 # ══════════════════════════════════════════
 # 7. 结论
 # ══════════════════════════════════════════
-H "7 / 7  结论"
+H "8 / 8  结论"
 
 gbas="$(find build -name '*.gba' 2>/dev/null)"
 if [ -n "$gbas" ]; then
