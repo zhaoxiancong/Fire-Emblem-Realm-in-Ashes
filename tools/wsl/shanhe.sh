@@ -75,9 +75,10 @@ if [ -d "$FRAMEWORK_DIR/.git" ]; then
   dim "分支 $(git rev-parse --abbrev-ref HEAD 2>/dev/null) · 提交 $(git log --oneline -1 2>/dev/null)"
 else
   warn "框架不存在，需要克隆"
-  if ask "现在克隆框架到 $FRAMEWORK_DIR ？"; then
+  if ask "现在克隆框架到 $FRAMEWORK_DIR ？（含子模块）"; then
     mkdir -p "$(dirname "$FRAMEWORK_DIR")"
-    git clone "$FRAMEWORK_REPO" "$FRAMEWORK_DIR" && cd "$FRAMEWORK_DIR" && ok "克隆完成"
+    git clone --recursive "$FRAMEWORK_REPO" "$FRAMEWORK_DIR" && cd "$FRAMEWORK_DIR" \
+      && { [ -f .gitmodules ] && git submodule update --init --recursive 2>&1 | tail -10 | sed 's/^/      /'; ok "克隆完成（含子模块）"; }
   else
     bad "已中止"; exit 1
   fi
@@ -152,11 +153,19 @@ if [ "$miss_n" -gt 0 ]; then
     if ask "现在重新克隆？"; then
       cd "$(dirname "$FRAMEWORK_DIR")" || exit 1
       mv "$FRAMEWORK_DIR" "${FRAMEWORK_DIR}.broken.$(date +%s)"
-      git clone "$FRAMEWORK_REPO" "$FRAMEWORK_DIR" && cd "$FRAMEWORK_DIR" || exit 1
-      git submodule update --init --recursive 2>/dev/null
+      # 关键：用 --recursive 一次拉全，避免克隆后子模块仍为空
+      if git clone --recursive "$FRAMEWORK_REPO" "$FRAMEWORK_DIR"; then
+        cd "$FRAMEWORK_DIR" || exit 1
+        ok "重克隆完成（含子模块）"
+      else
+        bad "重克隆失败"
+        cd "$FRAMEWORK_DIR" 2>/dev/null || true
+      fi
+      # 二次保险：显式再拉一次子模块
+      [ -f .gitmodules ] && git submodule update --init --recursive 2>&1 | tail -10 | sed 's/^/      /'
       find . -type f -not -path './.git/*' 2>/dev/null | sed 's|^\./||' | sort > "$LO"
       miss_n2=$(comm -23 "$UP" "$LO" | grep -c . 2>/dev/null); miss_n2=${miss_n2:-0}
-      [ "$miss_n2" -eq 0 ] && { ok "重新克隆后工作区完整"; FIXED=1; } || bad "仍缺 $miss_n2 个"
+      [ "$miss_n2" -eq 0 ] && { ok "重克隆后工作区完整"; FIXED=1; } || bad "仍缺 $miss_n2 个"
     fi
   fi
 else
@@ -199,14 +208,63 @@ H "5 / 7  子模块"
 if [ -f .gitmodules ]; then
   dim ".gitmodules 声明的子模块："
   grep -E '^\s*path' .gitmodules 2>/dev/null | sed 's/^/      /'
-  uninit="$(git submodule status --recursive 2>/dev/null | grep -c '^-' || echo 0)"
+  raw "$(grep -E '^\s*path' .gitmodules 2>/dev/null | sed 's/^/      /')"
+
+  uninit="$(git submodule status --recursive 2>/dev/null | grep -c '^-')"
+  uninit=${uninit:-0}
+
   if [ "$uninit" -gt 0 ]; then
-    warn "有 $uninit 个子模块未初始化，拉取中…"
+    warn "有 $uninit 个子模块未初始化，拉取中（这一步国内网络下容易失败，会重试）…"
     git submodule sync --recursive >/dev/null 2>&1
-    git submodule update --init --recursive --depth 1 2>&1 | tail -15 | sed 's/^/      /'
-    ok "子模块处理完成"
+
+    # 第一次：完整拉取（不要 --depth 1 —— 构建需要子模块内的数据文件如 data/*.bin）
+    if ! git submodule update --init --recursive 2>&1 | tail -20 | sed 's/^/      /'; then
+      warn "完整拉取失败，改用逐个子模块拉取…"
+      git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}' | while read -r sp; do
+        [ -z "$sp" ] && continue
+        dim "拉取 $sp …"
+        git submodule update --init --recursive -- "$sp" 2>&1 | tail -8 | sed 's/^/      /'
+      done
+    fi
   else
     ok "子模块均已初始化"
+  fi
+
+  # 校验：逐个检查子模块目录是否真的有内容（git 返回 0 不代表拉到了）
+  raw ""
+  dim "子模块目录实况校验："
+  sub_ok=1
+  while read -r sp; do
+    [ -z "$sp" ] && continue
+    if [ -d "$sp" ]; then
+      n=$(find "$sp" -type f -not -path '*/.git/*' 2>/dev/null | head -1 | wc -l)
+      if [ "$n" -gt 0 ]; then
+        ok "  $sp"
+      else
+        bad "  $sp 目录为空（拉取未成功）"
+        sub_ok=0
+      fi
+    else
+      bad "  $sp 目录不存在"
+      sub_ok=0
+    fi
+  done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}')
+
+  if [ "$sub_ok" -eq 0 ]; then
+    raw ""
+    warn "子模块未拉全，构建必然失败。手动修复："
+    raw "      cd $(pwd)"
+    raw "      git config --global http.proxy ${https_proxy:-http://127.0.0.1:7897}"
+    raw "      git submodule update --init --recursive"
+    raw "      # 若子模块用 git:// 协议（代理不生效）："
+    raw "      git config --global url.\"https://github.com/\".insteadOf \"git://github.com/\""
+    raw "      git submodule sync --recursive && git submodule update --init --recursive"
+    raw ""
+    if ! ask "仍要继续尝试构建？"; then
+      bad "已中止"; exit 1
+    fi
+  else
+    ok "子模块完整"
   fi
 else
   dim "无 .gitmodules（本仓库无需子模块）"
