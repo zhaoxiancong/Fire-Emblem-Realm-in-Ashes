@@ -66,6 +66,51 @@ for f in tools/gbagfx/gbagfx.s tools/gbagfx/Makefile; do
   fi
 done
 
+# ---------- 3.1 缺失时深挖来源 ----------
+step "3.1 gbagfx 来源溯源"
+if [ ! -e "$FRAMEWORK_DIR/tools/gbagfx/gbagfx.s" ]; then
+  # a) 是不是子模块
+  if [ -f "$FRAMEWORK_DIR/.gitmodules" ]; then
+    echo "  .gitmodules 内容："
+    sed 's/^/    /' "$FRAMEWORK_DIR/.gitmodules"
+    if grep -q 'gbagfx' "$FRAMEWORK_DIR/.gitmodules"; then
+      warn "gbagfx 是子模块，但未初始化 → 跑 submodule update"
+    else
+      warn "gbagfx 不在 .gitmodules 中"
+    fi
+  else
+    warn "没有 .gitmodules —— gbagfx 不是子模块"
+  fi
+
+  # b) 上游仓库里到底有没有这个路径
+  tracked="$(git -C "$FRAMEWORK_DIR" ls-tree -r HEAD --name-only 2>/dev/null | grep -i gbagfx | head -10)"
+  if [ -n "$tracked" ]; then
+    ok "上游仓库中确实跟踪了这些路径："
+    echo "$tracked" | sed 's/^/      /'
+    warn "→ 文件被跟踪但本地缺失，说明工作区损坏。git -C \"$FRAMEWORK_DIR\" checkout -- . 或重新 clone"
+  else
+    warn "上游仓库 HEAD 中未跟踪任何 gbagfx 路径"
+  fi
+
+  # c) tools/ 目录实况
+  echo "  tools/ 目录实际内容："
+  ls "$FRAMEWORK_DIR/tools" 2>/dev/null | head -20 | sed 's/^/      /' || echo "      （tools/ 不存在）"
+
+  # d) 是否有辅助工具构建脚本
+  echo "  辅助工具构建脚本候选："
+  found_bt=0
+  for s in build_tools.sh scripts/build_tools.sh make_tools.sh; do
+    [ -e "$FRAMEWORK_DIR/$s" ] && { echo "      $s"; found_bt=1; }
+  done
+  [ "$found_bt" -eq 0 ] && echo "      （未找到）"
+
+  # e) Makefile 里对 gbagfx 的引用
+  echo "  Makefile 中 gbagfx 相关规则："
+  grep -rn "gbagfx" "$FRAMEWORK_DIR/Makefile" 2>/dev/null | head -12 | sed 's/^/      /' || echo "      （无引用）"
+else
+  ok "gbagfx.s 已就位，无需溯源"
+fi
+
 # ---------- 4. 工具链 ----------
 step "4. ARM 工具链"
 for t in arm-none-eabi-gcc arm-none-eabi-as arm-none-eabi-ld arm-none-eabi-objcopy make python3 git; do
