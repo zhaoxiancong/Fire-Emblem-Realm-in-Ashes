@@ -1,0 +1,32 @@
+# ============ Godot 4 ============
+.godot/
+/android/
+export_presets.cfg
+export_credentials.cfg
+*.tmp
+*.log
+mono_crash.*.json
+
+# ============ 构建产物 ============
+build/
+dist/
+*.pck
+*.apk
+*.aab
+*.exe
+*.zip
+
+# ============ 系统 / 编辑器 ============
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============ 临时文件 ============
+*.orig
+*.rej
+*.bak
+~$*
