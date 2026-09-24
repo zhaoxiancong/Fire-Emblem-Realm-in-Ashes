@@ -46,17 +46,6 @@ ask()  { # $1=提示
   local a; read -r a; case "$a" in y|Y) return 0 ;; *) return 1 ;; esac
 }
 
-H() { printf "\n%s━━━━━━ %s ━━━━━━%s\n" "$c_cyan" "$1" "$c_off"; echo "### $1" >> "$REPORT"; }
-ok()   { printf "  %s✓%s %s\n" "$c_green" "$c_off" "$1"; }
-bad()  { printf "  %s✗%s %s\n" "$c_red" "$c_off" "$1"; }
-warn() { printf "  %s!%s %s\n" "$c_yellow" "$c_off" "$1"; }
-dim()  { printf "  %s%s%s\n" "$c_dim" "$1" "$c_off"; }
-ask()  { # $1=提示 $2=默认(y/N → N)
-  if [ "${AUTO:-0}" = "1" ]; then ok "AUTO 模式：自动回答「是」"; return 0; fi
-  printf "  %s→ %s (y/N) %s" "$c_yellow" "$1" "$c_off"
-  local a; read -r a; case "$a" in y|Y) return 0 ;; *) return 1 ;; esac
-}
-
 printf "%s╔══════════════════════════════════════════════════════╗%s\n" "$c_cyan" "$c_off"
 printf "%s║        《山河烬》一键诊断 / 修复 / 构建              ║%s\n" "$c_cyan" "$c_off"
 printf "%s╚══════════════════════════════════════════════════════╝%s\n" "$c_cyan" "$c_off"
