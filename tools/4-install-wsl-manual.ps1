@@ -140,6 +140,59 @@ if ($wslInstalled) {
     Write-Warn2 "未检测到 WSL 本体（只有 Windows 自带的 wsl.exe 存根）"
 }
 
+# ---------- 1.5 虚拟化与「待重启」预检（关键） ----------
+# 启用 VirtualMachinePlatform 后必须重启才生效。未重启就导入发行版，
+# 会报 HCS_E_SERVICE_NOT_AVAILABLE（主机计算服务不可用），极难自行定位。
+Write-Step "1.5 虚拟化与重启状态预检"
+
+$needReboot = $false
+if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $needReboot = $true }
+if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $needReboot = $true }
+
+$vmcompute = Get-Service -Name 'vmcompute' -ErrorAction SilentlyContinue
+$hvPresent = $false
+try { $hvPresent = [bool](Get-CimInstance Win32_ComputerSystem).HypervisorPresent } catch { }
+
+$cpu = $null
+try { $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 } catch { }
+
+if ($cpu) {
+    if ($cpu.VirtualizationFirmwareEnabled -eq $false) {
+        Write-Err2 "CPU 虚拟化在 BIOS/UEFI 中被禁用！请进 BIOS 开启 Intel VT-x / AMD-V 后重来。"
+        Read-Host "按回车退出"; exit 1
+    } else {
+        Write-Ok "CPU 虚拟化已开启（$($cpu.Name)）"
+    }
+}
+
+if ($needReboot) {
+    Write-Host ""
+    Write-Err2 "系统处于「待重启」状态——启用 WSL / 虚拟机平台后必须重启才会生效。"
+    Write-Host "    若此时导入发行版，会报 HCS_E_SERVICE_NOT_AVAILABLE（且极难自行定位）。" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "    请先重启电脑，然后重新运行本脚本（已下载的镜像会自动复用，不会重下）：" -ForegroundColor Yellow
+    Write-Host "      Restart-Computer" -ForegroundColor Cyan
+    Write-Host ""
+    Read-Host "按回车退出"
+    exit 1
+}
+
+if (-not $vmcompute) {
+    Write-Warn2 "未找到 vmcompute（Hyper-V 主机计算服务）。多半是重启后才出现。"
+    Write-Warn2 "若已重启仍缺失，请确认「虚拟机平台」功能已启用："
+    Write-Host "    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart"
+    $go = Read-Host "仍要继续？(y/N)"
+    if ($go -notin @('y','Y')) { exit 1 }
+} elseif ($vmcompute.Status -ne 'Running') {
+    Write-Warn2 "vmcompute 当前状态：$($vmcompute.Status)，尝试启动..."
+    try { Start-Service vmcompute -ErrorAction Stop; Write-Ok "vmcompute 已启动" }
+    catch { Write-Warn2 "启动失败（可能需要重启）：$($_.Exception.Message)" }
+} else {
+    Write-Ok "vmcompute 运行中"
+}
+
+Write-Ok "HypervisorPresent = $hvPresent"
+
 # ---------- 2. 安装 WSL 本体 ----------
 if (-not $SkipWsl -and -not $wslInstalled) {
     Write-Step "2. 下载并安装 WSL 本体"
@@ -281,7 +334,16 @@ if (-not $SkipUbuntu) {
         Write-Ok "发行版导入完成"
     } else {
         Write-Err2 "导入失败（返回码 $code）"
-        Write-Host "  手动执行：wsl --import $DistroName `"$InstallDir`" `"$wslImage`" --version 2"
+        Write-Host ""
+        # 针对最常见的 HCS_E_SERVICE_NOT_AVAILABLE 给出定向建议
+        $vmc = Get-Service -Name 'vmcompute' -ErrorAction SilentlyContinue
+        $hv2 = $false
+        try { $hv2 = [bool](Get-CimInstance Win32_ComputerSystem).HypervisorPresent } catch { }
+        if (-not $vmc -or -not $hv2) {
+            Write-Warn2 "推断：虚拟机平台尚未生效（vmcompute=$(if($vmc){$vmc.Status}else{'缺失'}), HypervisorPresent=$hv2）"
+            Write-Host "    若上面报的是 HCS_E_SERVICE_NOT_AVAILABLE —— 请先重启电脑，再重跑本脚本。" -ForegroundColor Yellow
+        }
+        Write-Host "  也可手动执行：wsl --import $DistroName `"$InstallDir`" `"$wslImage`" --version 2"
         Read-Host "按回车退出"; exit 1
     }
 }
