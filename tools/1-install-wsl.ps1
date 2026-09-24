@@ -119,15 +119,22 @@ foreach ($feat in @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform
 
 # ---------- 4. 安装 WSL + Ubuntu ----------
 Write-Step "3. 安装 WSL2 与 Ubuntu"
-Write-Host "执行：wsl --install -d Ubuntu --no-launch"
-Write-Host "（这一步可能需要几分钟，请耐心等待）"
-$code = Invoke-Native "wsl.exe" @('--install', '-d', 'Ubuntu', '--no-launch')
+Write-Host "执行：wsl --install -d Ubuntu --no-launch --web-download"
+Write-Host "  （--web-download 关键：改从 GitHub 下载，绕开 Microsoft Store 渠道的 403/龟速）"
+Write-Host "  （这一步可能需要几分钟，请耐心等待）"
+$code = Invoke-Native "wsl.exe" @('--install', '-d', 'Ubuntu', '--no-launch', '--web-download')
 if ($code -ne 0) {
-    Write-Warn "wsl --install 返回码 $code（可能已安装、或需重启后再执行）"
-    Write-Host "  可尝试先启用功能再安装："
+    Write-Warn "wsl --install 返回码 $code，尝试不带 --web-download 再试一次..."
+    $code = Invoke-Native "wsl.exe" @('--install', '-d', 'Ubuntu', '--no-launch')
+}
+if ($code -ne 0) {
+    Write-Warn "仍未成功（返回码 $code）。可尝试："
+    Write-Host "  1) 先启用功能再装："
     Write-Host "    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart"
     Write-Host "    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart"
-    Write-Host "  然后重启，再执行：wsl --install -d Ubuntu --no-launch"
+    Write-Host "  2) 重启后执行：wsl --install -d Ubuntu --no-launch --web-download"
+    Write-Host "  3) 若报「已禁止(403)」= 商店接口拒绝代理 IP，务必加 --web-download"
+    Write-Host "  4) 若下载极慢 = 未走代理，检查 Clash 的系统代理/虚拟网卡模式是否开启"
 } else {
     Write-Ok "WSL + Ubuntu 安装指令已下发"
 }

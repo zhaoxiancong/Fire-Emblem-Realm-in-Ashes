@@ -69,7 +69,40 @@ else
 fi
 
 # ---------- 1. 克隆框架 ----------
-step "1. 克隆 FE8 扩展框架"
+step "1. 网络连通性预检"
+
+# WSL 不走 Windows 的 Clash 代理，直连 GitHub 常极慢或超时。
+# 这里先探测，给出补救提示，避免后面 git clone 卡死半小时。
+if command -v curl >/dev/null 2>&1; then
+  probe=$(curl -s -o /dev/null -w '%{http_code}' --max-time 12 https://github.com 2>/dev/null || echo "000")
+  if [ "$probe" = "200" ] || [ "$probe" = "301" ] || [ "$probe" = "302" ]; then
+    ok "GitHub 可达（HTTP $probe）"
+  else
+    warn "GitHub 探测返回 $probe，可能不通或极慢"
+    cat <<'EOT'
+
+    WSL 默认不使用 Windows 的 Clash 代理。若接下来的 clone/apt 很慢，请先配置代理：
+
+    方案一（Win11 22H2+，推荐）——在 Windows 侧新建 %USERPROFILE%\.wslconfig：
+        [wsl2]
+        networkingMode=mirrored
+      然后执行  wsl --shutdown  再重进 WSL。
+
+    方案二——在 Clash 里打开「允许局域网连接」，然后在 WSL 里执行：
+        export HOST_IP=$(ip route show default | awk '{print $3}')
+        export http_proxy="http://$HOST_IP:7897"
+        export https_proxy="http://$HOST_IP:7897"
+      （端口换成 Clash 设置里显示的混合端口；apt 还需另配，见环境搭建指引「第四步」）
+
+EOT
+    read -r -p "    仍要继续？(y/N) " cont
+    case "$cont" in y|Y) ;; *) err "已中止。配置好代理后重跑本脚本。"; exit 1 ;; esac
+  fi
+else
+  warn "未安装 curl，跳过网络预检"
+fi
+
+step "2. 克隆 FE8 扩展框架"
 
 mkdir -p "$WORK_DIR"
 
@@ -90,7 +123,7 @@ cd "$FRAMEWORK_DIR"
 ok "工作目录：$(pwd)"
 
 # ---------- 2. 安装依赖 ----------
-step "2. 安装构建依赖"
+step "3. 安装构建依赖"
 
 if command -v apt-get >/dev/null 2>&1; then
   echo "检测到 apt（Ubuntu/WSL），安装依赖..."
@@ -113,7 +146,7 @@ else
 fi
 
 # 验证工具链
-step "2.1 验证工具链"
+step "3.1 验证工具链"
 missing=0
 for tool in arm-none-eabi-gcc arm-none-eabi-ld arm-none-eabi-objcopy python3 make git; do
   if command -v "$tool" >/dev/null 2>&1; then
@@ -130,7 +163,7 @@ for tool in gdb-multiarch arm-none-eabi-gdb mgba mgba-sdl; do
 done
 
 # ---------- 3. 首次构建 ----------
-step "3. 首次构建（默认 release ROM）"
+step "4. 首次构建（默认 release ROM）"
 echo "这一步最长约 15 分钟，请耐心等待..."
 make -j"$(nproc)"
 
@@ -143,7 +176,7 @@ else
 fi
 
 # ---------- 4. 中文版构建 ----------
-step "4. 构建中文版 ROM（32M）"
+step "5. 构建中文版 ROM（32M）"
 echo "配置：locales=$LOCALES, rom-size=$ROM_SIZE"
 
 if ./configure --with-enabled-locales="$LOCALES" --with-default-locale=zh-Hans \
@@ -158,7 +191,7 @@ else
 fi
 
 # ---------- 5. 结果 ----------
-step "5. 构建产物"
+step "6. 构建产物"
 find build -name '*.gba' -exec ls -lh {} \; 2>/dev/null || echo "（未找到 .gba）"
 
 cat <<EOF
