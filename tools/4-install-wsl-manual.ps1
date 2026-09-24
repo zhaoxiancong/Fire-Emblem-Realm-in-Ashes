@@ -160,11 +160,21 @@ $cpu = $null
 try { $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 } catch { }
 
 if ($cpu) {
-    if ($cpu.VirtualizationFirmwareEnabled -eq $false) {
-        Write-Err2 "CPU 虚拟化在 BIOS/UEFI 中被禁用！请进 BIOS 开启 Intel VT-x / AMD-V 后重来。"
+    # 重要：一旦 hypervisor 已启动（HypervisorPresent=True），
+    # Win32_Processor 的 VirtualizationFirmwareEnabled 与
+    # SecondLevelAddressTranslationExtensions 都会返回 False ——
+    # 因为 VT-x 已被 hypervisor 接管，WMI 不再暴露原始能力位。
+    # 这是 WMI 的已知行为，不代表 BIOS 关了虚拟化。
+    # 故仅在 hypervisor「未运行」时，才据该字段判定 BIOS 是否禁用虚拟化。
+    if ($hvPresent) {
+        Write-Ok "CPU 虚拟化已生效（hypervisor 运行中：$($cpu.Name)）"
+    } elseif ($cpu.VirtualizationFirmwareEnabled -eq $false) {
+        Write-Err2 "CPU 虚拟化在 BIOS/UEFI 中被禁用，且 hypervisor 未运行。"
+        Write-Host "    请进 BIOS/UEFI 开启 Intel VT-x / AMD-V 后重来。"
         Read-Host "按回车退出"; exit 1
+    } else {
+        Write-Ok "CPU 虚拟化已开启（$($cpu.Name)）"
     }
-    Write-Ok "CPU 虚拟化已开启（$($cpu.Name)）"
 }
 
 $vmState = if ($vmcompute) { $vmcompute.Status } else { '缺失' }

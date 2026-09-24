@@ -91,14 +91,20 @@ Write-Host "  已运行    : $([math]::Round(((Get-Date) - $os.LastBootUpTime).T
 
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 Write-Host "  CPU       : $($cpu.Name)"
-Write-Host "  VT-x/AMD-V: $($cpu.VirtualizationFirmwareEnabled)"
-Write-Host "  SLAT      : $($cpu.SecondLevelAddressTranslationExtensions)"
+Write-Host "  VT-x/AMD-V: $($cpu.VirtualizationFirmwareEnabled)   ← hypervisor 运行中时此项必为 False，属 WMI 已知行为"
+Write-Host "  SLAT      : $($cpu.SecondLevelAddressTranslationExtensions)   ← 同上"
 
 $cs = Get-CimInstance Win32_ComputerSystem
 Write-Host "  HypervisorPresent = $($cs.HypervisorPresent)"
 
-if ($cpu.VirtualizationFirmwareEnabled -eq $false) {
-    Write-Err2 "CPU 虚拟化在 BIOS/UEFI 中被禁用！请进 BIOS 开启 Intel VT-x / AMD-V。"
+# 只有在 hypervisor 未运行时，VirtualizationFirmwareEnabled=False 才意味着 BIOS 关了虚拟化。
+# hypervisor 一旦启动，VT-x 被其接管，WMI 就不再暴露该能力位（表现为 False），这是正常现象。
+if ($cs.HypervisorPresent) {
+    Write-Ok "CPU 虚拟化已生效（hypervisor 运行中）"
+} elseif ($cpu.VirtualizationFirmwareEnabled -eq $false) {
+    Write-Err2 "CPU 虚拟化在 BIOS/UEFI 中被禁用，且 hypervisor 未运行。请进 BIOS 开启 Intel VT-x / AMD-V。"
+} else {
+    Write-Ok "CPU 虚拟化已开启"
 }
 
 Write-Step "2. 可选功能状态"
