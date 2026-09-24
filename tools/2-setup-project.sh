@@ -68,38 +68,88 @@ else
   warn "无法识别发行版"
 fi
 
-# ---------- 1. 克隆框架 ----------
-step "1. 网络连通性预检"
+# ---------- 1. 网络与代理 ----------
+step "1. 网络与代理配置"
 
-# WSL 不走 Windows 的 Clash 代理，直连 GitHub 常极慢或超时。
-# 这里先探测，给出补救提示，避免后面 git clone 卡死半小时。
-if command -v curl >/dev/null 2>&1; then
-  probe=$(curl -s -o /dev/null -w '%{http_code}' --max-time 12 https://github.com 2>/dev/null || echo "000")
-  if [ "$probe" = "200" ] || [ "$probe" = "301" ] || [ "$probe" = "302" ]; then
-    ok "GitHub 可达（HTTP $probe）"
+# WSL 内的 apt / git 默认不走 Windows 的 Clash 代理，中国大陆环境下会极慢或超时。
+# 本步骤会：先试直连 → 不行再逐个候选代理探测 → 命中则自动配置环境变量与 apt。
+CLASH_PORT="${CLASH_PORT:-7897}"   # Clash Verge 默认混合端口
+
+# 候选代理地址：
+#   镜像网络（networkingMode=mirrored）→ WSL 与 Windows 共用网络栈，用 127.0.0.1
+#   NAT 模式 → 需用默认网关（Windows 宿主）地址
+GW="$(ip route show default 2>/dev/null | awk '{print $3}' | head -1)"
+CANDIDATES="http://127.0.0.1:${CLASH_PORT}"
+[ -n "$GW" ] && CANDIDATES="$CANDIDATES http://${GW}:${CLASH_PORT}"
+
+http_code() {  # $1=url  $2=可选代理
+  if [ -n "${2:-}" ]; then
+    curl -s -o /dev/null -w '%{http_code}' --max-time 10 -x "$2" "$1" 2>/dev/null || echo "000"
   else
-    warn "GitHub 探测返回 $probe，可能不通或极慢"
-    cat <<'EOT'
+    curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null || echo "000"
+  fi
+}
+is_ok() { case "$1" in 200|301|302|307|308) return 0 ;; *) return 1 ;; esac; }
 
-    WSL 默认不使用 Windows 的 Clash 代理。若接下来的 clone/apt 很慢，请先配置代理：
+if ! command -v curl >/dev/null 2>&1; then
+  warn "未安装 curl，跳过网络探测（apt 安装后会自动具备）"
+else
+  [ -n "$GW" ] && echo "  默认网关（Windows 宿主）= $GW"
+  direct="$(http_code https://github.com)"
+  echo "  直连 github.com → HTTP $direct"
 
-    方案一（Win11 22H2+，推荐）——在 Windows 侧新建 %USERPROFILE%\.wslconfig：
-        [wsl2]
-        networkingMode=mirrored
-      然后执行  wsl --shutdown  再重进 WSL。
+  if is_ok "$direct"; then
+    ok "直连可用，无需代理"
+  else
+    chosen=""
+    for p in $CANDIDATES; do
+      code="$(http_code https://github.com "$p")"
+      echo "  经 $p → HTTP $code"
+      if is_ok "$code"; then chosen="$p"; break; fi
+    done
 
-    方案二——在 Clash 里打开「允许局域网连接」，然后在 WSL 里执行：
-        export HOST_IP=$(ip route show default | awk '{print $3}')
-        export http_proxy="http://$HOST_IP:7897"
-        export https_proxy="http://$HOST_IP:7897"
-      （端口换成 Clash 设置里显示的混合端口；apt 还需另配，见环境搭建指引「第四步」）
+    if [ -n "$chosen" ]; then
+      export http_proxy="$chosen"
+      export https_proxy="$chosen"
+      ok "已启用代理：$chosen"
+
+      # 写入 ~/.bashrc（幂等）
+      if ! grep -q "山河烬代理配置" "$HOME/.bashrc" 2>/dev/null; then
+        {
+          echo ""
+          echo "# === 山河烬代理配置 ==="
+          echo "export http_proxy=\"$chosen\""
+          echo "export https_proxy=\"$chosen\""
+        } >> "$HOME/.bashrc"
+        ok "已写入 ~/.bashrc（下次登录自动生效）"
+      fi
+
+      # apt 不继承用户环境变量，需单独配置
+      sudo tee /etc/apt/apt.conf.d/95proxy >/dev/null <<EOT
+Acquire::http::Proxy "$chosen";
+Acquire::https::Proxy "$chosen";
+EOT
+      ok "已配置 apt 代理"
+    else
+      warn "未找到可用代理（尝试过：$CANDIDATES）"
+      cat <<'EOT'
+
+    请检查：
+      1) Clash 是否在运行？混合端口是否为 7897？（设置里可见，可改）
+      2) 是否已开启「系统代理」或「虚拟网卡(TUN)」？
+      3) 若用 NAT 网络模式，需在 Clash 里打开「允许局域网连接」
+      4) 端口不是 7897 时，用环境变量指定后重跑：
+           CLASH_PORT=你的端口 bash 2-setup-project.sh
+      5) 确认 Windows 侧已有 %USERPROFILE%\.wslconfig 且含：
+           [wsl2]
+           networkingMode=mirrored
+         改完执行  wsl --shutdown  再重进
 
 EOT
-    read -r -p "    仍要继续？(y/N) " cont
-    case "$cont" in y|Y) ;; *) err "已中止。配置好代理后重跑本脚本。"; exit 1 ;; esac
+      read -r -p "    仍要继续？(y/N) " cont
+      case "$cont" in y|Y) ;; *) err "已中止。配置好代理后重跑本脚本。"; exit 1 ;; esac
+    fi
   fi
-else
-  warn "未安装 curl，跳过网络预检"
 fi
 
 step "2. 克隆 FE8 扩展框架"
