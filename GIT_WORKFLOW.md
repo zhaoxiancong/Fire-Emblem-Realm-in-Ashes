@@ -61,7 +61,26 @@ chore(流程): 新增 .gitignore 与提交规范
 - 成块的新系统 / 实验性改动：开 `feat/xxx`、`exp/xxx` 分支，完成后合并回 `main` 并删除分支。
 - 分支命名：`feat/combat-forecast`、`docs/character-stats`、`exp/hex-grid`。
 
-## 4. 标准操作序列
+## 4. 自动推送钩子（一次安装，永久生效）
+
+仓库内带了 `post-commit` 钩子，**每次 `git commit` 成功后自动 `git push`**，把「必推送」从人肉纪律变成机械动作。
+
+```bash
+# 安装（每个克隆执行一次）
+git config core.hooksPath .githooks
+```
+
+Windows 下确认钩子可执行：
+
+```bash
+chmod +x .githooks/post-commit
+```
+
+- 钩子逻辑：读当前分支 → 若无上游则跳过并提示 → 否则 `git push origin <分支>`。
+- 推送失败**不会**回滚本地提交，但会在终端红字报错，此时必须手动补推。
+- 卸载：`git config --unset core.hooksPath`。
+
+## 5. 标准操作序列
 
 ```bash
 cd "D:/workbuddy/FireEmblem Realm-in-Ashes"
@@ -82,7 +101,7 @@ git push origin main
 
 首次推送 / 换分支时用 `git push -u origin <分支>`。
 
-## 5. 提交前自检清单
+## 6. 提交前自检清单
 
 - [ ] `git status` 里没有 `?? ` 的垃圾文件（有的话补进 `.gitignore`）
 - [ ] diff 里没有误删大段内容
@@ -90,7 +109,7 @@ git push origin main
 - [ ] 跨文档引用没写死绝对路径（一律用相对路径，如 `docs/3.游戏数值设定.md`）
 - [ ] 数值类改动只改 `3.游戏数值设定.md`，没在设计文档里复制数值
 
-## 6. 凭据
+## 7. 凭据
 
 Push 走 Git Credential Manager。若推送报 `Authentication failed`：
 
@@ -101,7 +120,7 @@ git credential-manager erase https://github.com   # 清掉旧凭据后重来
 
 也可在 GitHub → Settings → Developer settings → Personal access tokens 生成 classic token（`repo` 权限），推送时用户名填 GitHub 账号、密码填 token。
 
-## 7. 敏感信息
+## 8. 敏感信息
 
 - 不提交 `export_presets.cfg`（含签名密钥）、`export_credentials.cfg`、任何 token / 密钥文件。
 - 这些已在 `.gitignore` 中屏蔽；若发现被误提交，立刻改密并从历史中清理，通知协作者。

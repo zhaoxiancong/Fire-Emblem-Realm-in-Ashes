@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# post-commit —— 落实「一次改动 = 一次提交 = 一次推送」
+# 提交完成后自动推送当前分支到 origin。推送失败不回滚提交，但要显式报错。
+# 安装：git config core.hooksPath .githooks
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+
+if [ -z "$upstream" ]; then
+  echo "[post-commit] 分支 $branch 尚未绑定上游，跳过自动推送。"
+  echo "[post-commit] 手动绑定：git push -u origin $branch"
+  exit 0
+fi
+
+echo "[post-commit] 自动推送 $branch -> origin ..."
+if git push origin "$branch"; then
+  echo "[post-commit] ✔ 已同步到 GitHub"
+else
+  echo "[post-commit] ✘ 推送失败！请检查凭据/网络后手动执行：git push origin $branch" >&2
+  echo "[post-commit] ✘ 本地提交已生效，但远端未更新，切勿认为已完成。" >&2
+fi
