@@ -25,7 +25,8 @@ param(
     [string]$InstallDir = "D:\WSL\Ubuntu-24.04",
     [string]$UserName   = "shanhe",
     [switch]$SkipWsl,
-    [switch]$SkipUbuntu
+    [switch]$SkipUbuntu,
+    [switch]$Force
 )
 
 # 注意：本脚本大量调用外部命令（curl.exe / wsl.exe / msiexec），
@@ -116,6 +117,7 @@ if (-not (Test-Admin)) {
     )
     if ($SkipWsl)    { $argList += '-SkipWsl' }
     if ($SkipUbuntu) { $argList += '-SkipUbuntu' }
+    if ($Force)      { $argList += '-Force' }
     try {
         Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $argList
     } catch {
@@ -140,18 +142,19 @@ if ($wslInstalled) {
     Write-Warn2 "未检测到 WSL 本体（只有 Windows 自带的 wsl.exe 存根）"
 }
 
-# ---------- 1.5 虚拟化与「待重启」预检（关键） ----------
-# 启用 VirtualMachinePlatform 后必须重启才生效。未重启就导入发行版，
-# 会报 HCS_E_SERVICE_NOT_AVAILABLE（主机计算服务不可用），极难自行定位。
-Write-Step "1.5 虚拟化与重启状态预检"
-
-$needReboot = $false
-if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $needReboot = $true }
-if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $needReboot = $true }
+# ---------- 1.5 虚拟化就绪检查（关键） ----------
+# 真正的门槛是「功能性判据」，不是「待重启标记」：
+#   功能判据 = vmcompute 服务存在 且 HypervisorPresent=True
+# RebootPending 标记可能被 Windows 更新单独置位并长期滞留，
+# 只看该标记会把已经重启过的用户错误拦下（实测踩过）。
+Write-Step "1.5 虚拟化就绪检查"
 
 $vmcompute = Get-Service -Name 'vmcompute' -ErrorAction SilentlyContinue
 $hvPresent = $false
 try { $hvPresent = [bool](Get-CimInstance Win32_ComputerSystem).HypervisorPresent } catch { }
+
+$needReboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+              (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
 
 $cpu = $null
 try { $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 } catch { }
@@ -160,38 +163,43 @@ if ($cpu) {
     if ($cpu.VirtualizationFirmwareEnabled -eq $false) {
         Write-Err2 "CPU 虚拟化在 BIOS/UEFI 中被禁用！请进 BIOS 开启 Intel VT-x / AMD-V 后重来。"
         Read-Host "按回车退出"; exit 1
-    } else {
-        Write-Ok "CPU 虚拟化已开启（$($cpu.Name)）"
     }
+    Write-Ok "CPU 虚拟化已开启（$($cpu.Name)）"
 }
 
-if ($needReboot) {
-    Write-Host ""
-    Write-Err2 "系统处于「待重启」状态——启用 WSL / 虚拟机平台后必须重启才会生效。"
-    Write-Host "    若此时导入发行版，会报 HCS_E_SERVICE_NOT_AVAILABLE（且极难自行定位）。" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "    请先重启电脑，然后重新运行本脚本（已下载的镜像会自动复用，不会重下）：" -ForegroundColor Yellow
-    Write-Host "      Restart-Computer" -ForegroundColor Cyan
-    Write-Host ""
-    Read-Host "按回车退出"
-    exit 1
-}
+$vmState = if ($vmcompute) { $vmcompute.Status } else { '缺失' }
+Write-Host "    vmcompute = $vmState ; HypervisorPresent = $hvPresent ; 待重启标记 = $needReboot"
 
-if (-not $vmcompute) {
-    Write-Warn2 "未找到 vmcompute（Hyper-V 主机计算服务）。多半是重启后才出现。"
-    Write-Warn2 "若已重启仍缺失，请确认「虚拟机平台」功能已启用："
-    Write-Host "    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart"
-    $go = Read-Host "仍要继续？(y/N)"
-    if ($go -notin @('y','Y')) { exit 1 }
-} elseif ($vmcompute.Status -ne 'Running') {
-    Write-Warn2 "vmcompute 当前状态：$($vmcompute.Status)，尝试启动..."
-    try { Start-Service vmcompute -ErrorAction Stop; Write-Ok "vmcompute 已启动" }
-    catch { Write-Warn2 "启动失败（可能需要重启）：$($_.Exception.Message)" }
+$ready = ($null -ne $vmcompute) -and $hvPresent
+
+if ($ready) {
+    Write-Ok "虚拟化层已就绪"
+    if ($needReboot) {
+        Write-Warn2 "系统仍有其他待重启项（多半是 Windows 更新），但不影响 WSL，继续。"
+    }
+    # vmcompute 未运行则尝试拉起
+    if ($vmcompute -and $vmcompute.Status -ne 'Running') {
+        try { Start-Service vmcompute -ErrorAction Stop; Write-Ok "已启动 vmcompute" }
+        catch { Write-Warn2 "vmcompute 启动失败（可能需要重启）：$($_.Exception.Message)" }
+    }
 } else {
-    Write-Ok "vmcompute 运行中"
+    Write-Host ""
+    Write-Err2 "虚拟化层尚未就绪 —— 直接导入发行版会报 HCS_E_SERVICE_NOT_AVAILABLE"
+    Write-Host ""
+    Write-Host "    常见原因（按概率排序）：" -ForegroundColor Yellow
+    Write-Host "      1) 虚拟机平台功能其实还没启用成功（需管理员复查）"
+    Write-Host "      2) 有 Windows 更新在待安装，阻塞了功能启用"
+    Write-Host "      3) hypervisorlaunchtype 被设为 off"
+    Write-Host ""
+    Write-Host "    请先运行专用修复脚本（会自动提权）：" -ForegroundColor Cyan
+    Write-Host "      powershell -ExecutionPolicy Bypass -File `"$PSScriptRoot\5-fix-virtualization.ps1`"" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "    若你确认已处理过，可加 -Force 跳过本检查继续尝试：" -ForegroundColor DarkGray
+    Write-Host "      ... -Force" -ForegroundColor DarkGray
+    Write-Host ""
+    if (-not $Force) { Read-Host "按回车退出"; exit 1 }
+    Write-Warn2 "-Force 已指定，跳过检查继续（可能仍会失败）"
 }
-
-Write-Ok "HypervisorPresent = $hvPresent"
 
 # ---------- 2. 安装 WSL 本体 ----------
 if (-not $SkipWsl -and -not $wslInstalled) {
