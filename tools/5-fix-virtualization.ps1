@@ -61,6 +61,17 @@ if (-not (Test-Admin)) {
 }
 
 # ============================================================
+# 日志：提权后输出会写到这里，便于把结果回传（含 -DiagnoseOnly）
+# ============================================================
+$LogFile = Join-Path $env:TEMP 'shanhe-wsl-fix-report.txt'
+try {
+    Start-Transcript -Path $LogFile -Force | Out-Null
+    Write-Host "（日志同步写入：$LogFile）" -ForegroundColor DarkGray
+} catch {
+    Write-Warn2 "无法启动日志记录：$($_.Exception.Message)"
+}
+
+# ============================================================
 # 1. 体检
 # ============================================================
 Write-Step "1. 系统与硬件"
@@ -158,6 +169,7 @@ if ($ready) {
 
 if ($DiagnoseOnly) {
     Write-Host "`n（-DiagnoseOnly：不做任何修改）" -ForegroundColor DarkGray
+    try { Stop-Transcript | Out-Null } catch { }
     Read-Host "`n按回车退出"
     exit 0
 }
@@ -230,4 +242,6 @@ if ($needReboot) {
 }
 
 Write-Host ""
+try { Stop-Transcript | Out-Null } catch { }
+Write-Host "日志已保存：$LogFile" -ForegroundColor DarkGray
 Read-Host "按回车退出"
