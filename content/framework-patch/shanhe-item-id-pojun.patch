@@ -1,0 +1,46 @@
+# 山河烬 框架补丁: shanhe-item-id-pojun
+#
+# 目标文件: include/constants/items_expansion.h   (框架只读依赖 -> unified diff 最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么(1 行): 把框架扩展槽符号 `ITEM_EXPANSION_CE` 改为 `ITEM_SHANHE_POJUN`，
+#   仍取 0xCE —— **不新增 ID 槽**，只是让第一块扩展槽承载真实内容。
+#
+# 为什么可以复用 0xCE（2026-09-25 实测依据）:
+#   ① 原版 `include/constants/items.h` 的枚举止于 `ITEM_UNK_CD = 0xCD`（第 239 行），
+#      原版 `src/data/items.json` 正好 206 条（0x00~0xCD）⇒ **0xCE 是第一块真正的空位**。
+#   ② 那条 `ITEM_EXPANSION_CE`（authoringName "Sample Charm"）是框架为
+#      `EXPANSION_STARTER_CONTENT=1` 档准备的**示例**，其机制代码在
+#      src/expansion_starter_content.c，只在开该开关时链接。
+#      本项目**不开** `EXPANSION_STARTER_CONTENT` ⇒ 样例在 ROM 里只是一条
+#      **无机制的孤儿数据**，占着 0xCE 纯属浪费。
+#   ③ 存储代价为 0：`ItemId` 是 u8（id_space.h ITEM_ID_STORAGE_BITS=8），
+#      存档字段是 14-bit（item_fits_save14 断言）⇒ 0xCE 不增加任何存档字节，
+#      **不破存档兼容**（对比：扩武器类型要动 ranks[8]，老档全废）。
+#
+# 配套（三件一起才生效）:
+#   · shanhe-item-pojun-data.patch —— 把 src/data/items_expansion.json 的样例记录
+#     替换为破军记录（否则 0xCE 表项内容仍是 Sample Charm）。
+#   · 构建开关 FE8_ITEM_ID_CAP=0xCE —— 让 ITEM_ID_CONFIGURED_CAP 真正覆盖 0xCE
+#     （id_space.h 默认 0xCD 时，任何引用 ITEM_SHANHE_POJUN 的代码都过不了 cap 校验）。
+#   · M3② 本体需要 EXPANSION_MECHANICS_HOOKS=1（破军的加成机制走机制钩子）。
+#
+# ⚠️ 为何在这里定义而不在 items.h：保持"原版枚举不动"的框架惯例 ——
+#   默认构建不 include 本头文件，任何误引用扩展 ID 会在编译期早失败。
+#
+# 上游若自行引入等价机制，本补丁可删除。详见 docs/5 §5.9 与 docs/4 R-26/M3③。
+#
+--- a/include/constants/items_expansion.h
++++ b/include/constants/items_expansion.h
+@@ -15,7 +15,10 @@
+  * see reports/id_space_audit.md, item domain.
+  */
+ enum {
+-    ITEM_EXPANSION_CE = 0xCE,
++    /* Shanhe: the first expansion slot (0xCE) carries the project's first
++     * original divine relic, "Pojun" -- a lance, Qin Hongying's
++     * inheritance in chapter 3. See docs/3 section 3.2, docs/5 section 5.9. */
++    ITEM_SHANHE_POJUN = 0xCE,
+ };
+ 
+ #endif /* GUARD_CONSTANTS_ITEMS_EXPANSION_H */

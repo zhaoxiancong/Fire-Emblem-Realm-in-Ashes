@@ -93,6 +93,30 @@ ROM_BYTES="$(lock_get build rom_size_bytes)"
 TITLE_EXPECT="$(lock_get build rom_header_game_title)"
 CODE_EXPECT="$(lock_get build rom_header_game_code)"
 
+# ── [features]：构建开关（单一事实来源 = framework.lock） ──
+# 铁律之六：能从单一来源派生的必须派生。这些值**只在这里读一次**，
+# 再统一拼成 make 变量；不在构建命令里硬编码。
+FEAT_ITEM_CAP="$(lock_get features item_id_cap)"
+FEAT_MECH_HOOKS="$(lock_get features mechanics_hooks)"
+
+# 拼装 make 命令行变量（空值 = 不传，用框架默认）
+MAKE_VARS=""
+[ -n "$FEAT_ITEM_CAP" ] && MAKE_VARS="$MAKE_VARS FE8_ITEM_ID_CAP=$FEAT_ITEM_CAP"
+[ -n "$FEAT_MECH_HOOKS" ] && MAKE_VARS="$MAKE_VARS EXPANSION_MECHANICS_HOOKS=$FEAT_MECH_HOOKS"
+MAKE_VARS="${MAKE_VARS# }"
+
+# ⚠️ 同时 export：generated_data 的 Python 工具链（validate/generate/idspace）
+#    也从**环境变量**读同一批配置。不 export 会导致：
+#      · 3a' 的 validate 以默认 cap 0xCD 判定 ⇒ overlay 道具被判「超 cap」⇒ 中止
+#      · generate 产出与 make 不一致的表
+#    export 后，shell 子进程与 make 看到的是同一组值（单一事实来源）。
+if [ -n "$FEAT_ITEM_CAP" ]; then
+  export FE8_ITEM_ID_CAP="$FEAT_ITEM_CAP"
+fi
+if [ -n "$FEAT_MECH_HOOKS" ]; then
+  export EXPANSION_MECHANICS_HOOKS="$FEAT_MECH_HOOKS"
+fi
+
 FRAMEWORK_ROM="$FRAMEWORK_DIR/$ROM_REL"
 
 # 框架是否就绪
@@ -388,7 +412,14 @@ else:
     #       attacker/defender/hitBonus/atkBonus，没有可定位的键）。
     #       这类表无法「按条匹配」，只能整体覆盖；因此**必须显式列出**，
     #       以免把"定位键写错"静默当成整表替换。
-    WHOLE_TABLE_REPLACE = ("weapontriangle.json",)
+    #
+    # ★ items_expansion.json 也在列（2026-09-25，M3③）——理由与纯规则表不同但结论相同：
+    #   它是**扩展 overlay 表**（只含 ID >= 0xCE 的《山河烬》原创道具），
+    #   **不曾承载任何原版内容**（原版 206 条在 items.json，不在本表）。
+    #   框架自带一条样例记录 ITEM_EXPANSION_CE，本项目已用补丁把该符号改名
+    #   （shanhe-item-id-pojun.patch）⇒ 若走"按键追加"，框架那条样例会**残留**
+    #   一个指向已不存在符号的记录 ⇒ 编译失败。整表替换让它被自然覆盖，零孤儿。
+    WHOLE_TABLE_REPLACE = ("weapontriangle.json", "items_expansion.json")
     if name in WHOLE_TABLE_REPLACE:
         new_list = patch.get(lk)
         if not isinstance(new_list, list) or not new_list:
@@ -865,7 +896,7 @@ act "铺设完成：合并/铺设 $MERGED_COUNT 项，跳过 $SKIPPED_COUNT 项"
 H "第 4 步 / 构建"
 
 if [ "$DRY_RUN" = "1" ]; then
-  act "[预演] 将执行：cd $FRAMEWORK_DIR && make $MAKE_TARGET"
+  act "[预演] 将执行：cd $FRAMEWORK_DIR && make $MAKE_TARGET ${MAKE_VARS:+$MAKE_VARS }"
   dim "（含宿主机工具保障：tools/{aif2pcm,bin2c,gbagfx,jsonproc,mid2agb,preproc,scaninc,textencode}）"
 elif [ "$SKIP_BUILD" = "1" ]; then
   warn "SKIP_BUILD=1 —— 跳过构建"
@@ -881,9 +912,13 @@ else
   ok "宿主机工具就绪"
 
   BUILD_LOG="$LOG_DIR/build-$STAMP.log"
-  act "make $MAKE_TARGET（日志：$BUILD_LOG）"
+  if [ -n "$MAKE_VARS" ]; then
+    act "make $MAKE_TARGET $MAKE_VARS（日志：$BUILD_LOG）"
+  else
+    act "make $MAKE_TARGET（日志：$BUILD_LOG）"
+  fi
   dim "首次/改表后编译较慢，请耐心…"
-  ( cd "$FRAMEWORK_DIR" && make "$MAKE_TARGET" ) > "$BUILD_LOG" 2>&1
+  ( cd "$FRAMEWORK_DIR" && make "$MAKE_TARGET" $MAKE_VARS ) > "$BUILD_LOG" 2>&1
   RC=$?
   if [ $RC -eq 0 ]; then
     ok "构建成功"

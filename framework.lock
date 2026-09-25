@@ -45,6 +45,23 @@ rom_size_label = 32M
 rom_header_game_title = FIREEMBLEM2E
 rom_header_game_code  = BE8E
 
+[features]
+# ★ 传给 make 的构建开关（单一事实来源；shanhe-build.sh 从这里读，不硬编码）
+# ------------------------------------------------------------
+# 留空 = 用框架默认值（make 变量不传）。
+# 术语（相对配置，不是绝对常量）：
+#   item_id_cap   道具 ID 上限，覆盖 include/id_space.h 的默认 0xCD。
+#                 0xCE = 放开第一块扩展槽（M3③：原创神器「破军」占 0xCE）。
+#                 ⚠️ 仅现代车道支持；legacy/agbcc 会硬报错（generated_data.mk 已挡）。
+#   mechanics_hooks  链接战斗数值机制钩子注册表（include/expansion_mechanics.h）。
+#                    1 = 允许用 ExpansionMechanicsRegister() 注册原创机制（M3② 本体）。
+# ------------------------------------------------------------
+item_id_cap      = 0xCE
+mechanics_hooks  = 1
+# 以下保持框架默认（0 = 不链接框架自带样例，避免污染 ROM）：
+#   EXPANSION_MECHANICS_SAMPLE / EXPANSION_STARTER_CONTENT
+#   —— 本项目用自有机制与自有道具，不链接框架样例。
+
 [locales]
 # 中文是官方一等公民；32M 是「任何真实本地化语言」的共同要求，非中文独享
 enabled = en,zh-Hans

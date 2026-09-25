@@ -1,0 +1,22 @@
+{
+  "$schema": "fe8.items.v1",
+  "items": [
+    {
+      "item": "ITEM_SHANHE_POJUN",
+      "authoringName": "Pojun",
+      "authoringDescription": "Hongying's inheritance -- the lance her father carried the night he fell at Mengjin Ford.",
+      "authoringUseDescription": "A divine relic: stands outside the mortal weapon lineages. Deadly against armored foes.",
+      "weaponType": "ITYPE_LANCE",
+      "attributes": ["IA_WEAPON", "IA_SHENQI", "IA_UNSELLABLE"],
+      "maxUses": 40,
+      "might": 13,
+      "hit": 85,
+      "weight": 11,
+      "crit": 15,
+      "range": { "min": 1, "max": 1 },
+      "requiredWexp": "WPN_EXP_C",
+      "iconId": 222,
+      "weaponExp": 2
+    }
+  ]
+}
