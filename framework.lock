@@ -1,0 +1,76 @@
+# ============================================================
+#  framework.lock —— 上游框架的唯一依赖声明（方案 B 铁律之二）
+# ============================================================
+#
+# 本文件是《山河烬》对上游框架的**唯一**依赖声明。
+# 升级框架 = 改这里的 commit + 重跑构建 + 跑回归，不是随手 git pull。
+#
+# 解析者：tools/shanhe-build.sh（第 1 步「校验」）
+# 规范：    docs/6.方案B内容外置规划.md §1.3 / §3.1
+# ------------------------------------------------------------
+
+[framework]
+# 上游仓库
+repo        = https://github.com/laqieer/fireemblem8-expansion
+# 默认分支（注意：上游用 master，不是 main）
+branch      = master
+# ★ 钉死的 commit —— 唯一的版本标识
+commit      = ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+commit_short = ec1dc855
+# 该 commit 的提交标题（便于人读；校验时可选比对）
+commit_subject = Merge PR #269: atomically publish shared text outputs
+# 框架落在 WSL 侧的路径（相对 $HOME）
+path        = projects/fireemblem8-expansion
+
+[submodule.mgfembp]
+# ★ 子模块也必须钉死 —— 否则 clone 出来的内容会随上游漂移
+url        = https://github.com/laqieer/mgfembp
+commit     = c87e74dcd6c8878b809e013cd8ff0c52baa75332
+commit_short = c87e74dc
+# 校验文件：存在即可证明子模块真的拉下来了（git 返回 0 ≠ 拉到了）
+# ⚠️ 注意真实文件名是 mgfembp.lds（不是 .lds.s）——make 报错里的
+#    "can't open mgfembp/mgfembp.lds.s" 是隐式规则猜出来的假名，别照抄。
+probe_file = mgfembp/mgfembp.lds
+
+[build]
+# 构建目标 —— 现代车道（GCC/AAPCS），绝不用 legacy/agbcc 档案车道
+make_target  = all
+modern_config = release
+modern_abi    = aapcs
+# 产物路径（相对框架根）
+rom_path     = build/expansion-modern/release/aapcs/fireemblem8.gba
+# 产物规格（第 5 步「验产物」逐项断言）
+rom_size_bytes = 33554432
+rom_size_label = 32M
+rom_header_game_title = FIREEMBLEM2E
+rom_header_game_code  = BE8E
+
+[locales]
+# 中文是官方一等公民；32M 是「任何真实本地化语言」的共同要求，非中文独享
+enabled = en,zh-Hans
+default = zh-Hans
+
+[baseline]
+# 基线记录（2026-09-25 实测）—— 用于「与基线一致」的人工核对，
+# 脚本**不**依赖它做门禁（因为改内容后 SHA1 必然变）。
+recorded_at = 2026-09-25
+# 英文 16M ROM
+baseline_en_rom_sha1  = 8d16fa64
+baseline_en_rom_bytes = 16777216
+# 中文 32M ROM（framebuffer 像素经实机验证：报、报告！汉字清晰无豆腐块）
+baseline_cn_rom_sha1  = 508f6109
+baseline_cn_rom_bytes = 33554432
+# 框架侧关键文件 SHA1（RESTORE 后的逐字节核对基准）
+framework_src_data_characters_json_sha1 = 6cbf4ee793764adaa33b7e742c9820428407e2dc
+framework_src_data_classes_json_sha1    = 7b5142595458b6bcfce1cbd52ff5fcba2392305d
+framework_src_data_items_json_sha1      = 3b9e3cb47c039884877d9677771c157946a705aa
+
+[verify]
+# ★ 本项目**不用**上游 expansion-modern-boot-check 做验收。
+# 理由（2026-09-26 实测）：该目标走 --policy behavior，而该策略只排除顶层
+# `rom` 键，其余全部严格比对 —— 含 framebuffer_hash（逐帧像素哈希）。
+# 一旦启用中文，title 画面像素必变 → 必然失败。它是上游对自身基线的回归门禁。
+# 详见 docs/6.方案B内容外置规划.md §3.1。
+use_upstream_boot_check = false
+# 改用自建五项校验（由 shanhe-build.sh 第 5 步实现）
+self_verify = rom_exists,rom_size,rom_header,rom_bootable,cn_glyph_visible

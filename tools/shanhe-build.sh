@@ -1,0 +1,684 @@
+#!/usr/bin/env bash
+# ============================================================
+# 《山河烬》方案 B —— 内容同步 + 构建（六步）
+# ------------------------------------------------------------
+# 本仓库（内容）→ 框架（只读依赖）→ 可玩 ROM
+#
+# 用法（在本仓库根目录跑）：
+#   bash tools/shanhe-build.sh                 # 完整：预检→校验→快照→铺设→构建→验产物→反查
+#   DRY_RUN=1 bash tools/shanhe-build.sh       # 预演：只打印将要做什么，不落盘、不构建
+#   STATUS=1  bash tools/shanhe-build.sh       # 查看框架侧当前被改了什么（只读）
+#   RESTORE=1 bash tools/shanhe-build.sh       # 一键还原框架到 framework.lock 的上游状态
+#   SKIP_BUILD=1 bash tools/shanhe-build.sh    # 只铺设不构建（调试合并逻辑用）
+#
+# 环境变量可覆盖：
+#   FRAMEWORK_DIR=/path   框架位置（默认 $HOME/projects/fireemblem8-expansion）
+#   CONTENT_DIR=/path     内容位置（默认本仓库的 content/）
+#   CLASH_PORT=7897       代理端口
+#
+# 规范：docs/6.方案B内容外置规划.md §3
+# 依赖声明：framework.lock
+# ============================================================
+
+set +e
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+# ─────────────────────────── 配置 ───────────────────────────
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOCK_FILE="$REPO_ROOT/framework.lock"
+CONTENT_DIR="${CONTENT_DIR:-$REPO_ROOT/content}"
+FRAMEWORK_DIR="${FRAMEWORK_DIR:-$HOME/projects/fireemblem8-expansion}"
+CLASH_PORT="${CLASH_PORT:-7897}"
+LOG_DIR="$HOME/shanhe-logs"
+mkdir -p "$LOG_DIR"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+REPORT="$LOG_DIR/sync-$STAMP.log"
+PREWRITE_SNAPSHOT="$LOG_DIR/prewrite-$STAMP.sha1"
+
+DRY_RUN="${DRY_RUN:-0}"
+STATUS="${STATUS:-0}"
+RESTORE="${RESTORE:-0}"
+SKIP_BUILD="${SKIP_BUILD:-0}"
+
+c_cyan=$'\033[0;36m'; c_green=$'\033[0;32m'; c_yellow=$'\033[1;33m'
+c_red=$'\033[0;31m'; c_dim=$'\033[2m'; c_off=$'\033[0m'
+
+_plain() { sed -e 's/\x1b\[[0-9;]*m//g'; }
+H()    { printf "\n%s━━━━━━ %s ━━━━━━%s\n" "$c_cyan" "$1" "$c_off"
+         printf "\n===== %s =====\n" "$1" >> "$REPORT"; }
+ok()   { printf "  %s✓%s %s\n" "$c_green" "$c_off" "$1";  printf "  [OK] %s\n" "$1" >> "$REPORT"; }
+bad()  { printf "  %s✗%s %s\n" "$c_red" "$c_off" "$1";    printf "  [X]  %s\n" "$1" >> "$REPORT"; }
+warn() { printf "  %s!%s %s\n" "$c_yellow" "$c_off" "$1"; printf "  [!]  %s\n" "$1" >> "$REPORT"; }
+dim()  { printf "  %s%s%s\n" "$c_dim" "$1" "$c_off";      printf "       %s\n" "$1" >> "$REPORT"; }
+act()  { printf "  %s→%s %s\n" "$c_cyan" "$c_off" "$1";   printf "  [>]  %s\n" "$1" >> "$REPORT"; }
+
+die() { bad "$1"; printf "\n  日志：%s\n" "$REPORT"; exit 1; }
+
+# ─────────────────────────── 头 ───────────────────────────
+printf "%s╔══════════════════════════════════════════════════════╗%s\n" "$c_cyan" "$c_off"
+printf "%s║   《山河烬》方案 B · 内容同步 + 构建                  ║%s\n" "$c_cyan" "$c_off"
+printf "%s╚══════════════════════════════════════════════════════╝%s\n" "$c_cyan" "$c_off"
+printf "  时间：%s\n" "$(date '+%F %T')"
+printf "  本仓库：%s\n" "$REPO_ROOT"
+printf "  内容：  %s\n" "$CONTENT_DIR"
+printf "  框架：  %s\n" "$FRAMEWORK_DIR"
+printf "  日志：  %s\n" "$REPORT"
+if [ "$DRY_RUN" = "1" ]; then printf "  %s模式：DRY_RUN（预演，不落盘不构建）%s\n" "$c_yellow" "$c_off"; fi
+if [ "$STATUS"  = "1" ]; then printf "  %s模式：STATUS（只读）%s\n" "$c_yellow" "$c_off"; fi
+if [ "$RESTORE" = "1" ]; then printf "  %s模式：RESTORE（一键还原框架）%s\n" "$c_yellow" "$c_off"; fi
+
+# ─────────────────────────── 工具 ───────────────────────────
+# 从 framework.lock 读一个键：lock_get <section> <key>
+lock_get() {
+  awk -v sec="$1" -v key="$2" '
+    /^\[/ { cur = $0; gsub(/[][]/, "", cur) }
+    cur == sec && $0 ~ "^[ \t]*" key "[ \t]*=" {
+      sub(/^[^=]*=[ \t]*/, ""); sub(/[ \t]+$/, ""); print; exit
+    }
+  ' "$LOCK_FILE"
+}
+
+FRAMEWORK_REPO="$(lock_get framework repo)"
+FRAMEWORK_COMMIT="$(lock_get framework commit)"
+FRAMEWORK_BRANCH="$(lock_get framework branch)"
+FRAMEWORK_SUBJECT="$(lock_get framework commit_subject)"
+MG_COMMIT="$(lock_get submodule.mgfembp commit)"
+MG_PROBE="$(lock_get submodule.mgfembp probe_file)"
+MAKE_TARGET="$(lock_get build make_target)"
+M_CFG="$(lock_get build modern_config)"
+M_ABI="$(lock_get build modern_abi)"
+ROM_REL="$(lock_get build rom_path)"
+ROM_BYTES="$(lock_get build rom_size_bytes)"
+TITLE_EXPECT="$(lock_get build rom_header_game_title)"
+CODE_EXPECT="$(lock_get build rom_header_game_code)"
+
+FRAMEWORK_ROM="$FRAMEWORK_DIR/$ROM_REL"
+
+# 框架是否就绪
+framework_ready() { [ -d "$FRAMEWORK_DIR/.git" ]; }
+
+# ─────────────────────────── RESTORE 模式 ───────────────────────────
+if [ "$RESTORE" = "1" ]; then
+  H "RESTORE · 一键还原框架"
+  framework_ready || die "框架目录不存在：$FRAMEWORK_DIR"
+
+  DIRTY="$(git -C "$FRAMEWORK_DIR" status --porcelain)"
+  if [ -z "$DIRTY" ]; then
+    ok "框架工作区本来就是干净的，无需还原"
+    printf "\n  日志：%s\n" "$REPORT"; exit 0
+  fi
+
+  warn "以下文件将被还原到 framework.lock 的上游状态（丢弃本地改动）："
+  printf '%s\n' "$DIRTY" | sed 's/^/      /' | tee -a "$REPORT"
+  printf "\n"
+  printf "  %s→ 确认还原？(y/N) %s" "$c_yellow" "$c_off"
+  read -r ans
+  case "$ans" in
+    y|Y) ;;
+    *) bad "已取消，未做任何改动"; exit 0 ;;
+  esac
+
+  # 三级递进还原（对 skip-worktree/assume-unchanged 也有效）
+  act "git checkout HEAD -- ."
+  git -C "$FRAMEWORK_DIR" checkout HEAD -- . 2>&1 | sed 's/^/      /' | tee -a "$REPORT"
+  act "git restore --source=HEAD --staged --worktree ."
+  git -C "$FRAMEWORK_DIR" restore --source=HEAD --staged --worktree . 2>&1 | sed 's/^/      /' | tee -a "$REPORT"
+
+  LEFT="$(git -C "$FRAMEWORK_DIR" status --porcelain)"
+  if [ -z "$LEFT" ]; then
+    ok "框架已逐字节还原到上游状态"
+    # 与 lock 里记录的 SHA1 对照（强化核验）
+    CJ="$FRAMEWORK_DIR/src/data/characters.json"
+    EXP="$(lock_get baseline framework_src_data_characters_json_sha1)"
+    [ -f "$CJ" ] && GOT="$(sha1sum "$CJ" | cut -d' ' -f1)" || GOT=""
+    if [ -n "$EXP" ] && [ "$GOT" = "$EXP" ]; then
+      ok "characters.json SHA1 与 lock 记录一致（$GOT）"
+    elif [ -n "$EXP" ]; then
+      warn "characters.json SHA1 = $GOT，lock 记录 = $EXP（可能上游已前进，请核对）"
+    fi
+  else
+    warn "仍有未还原项："
+    printf '%s\n' "$LEFT" | sed 's/^/      /'
+    warn "如仍不干净，手动执行：git -C \"$FRAMEWORK_DIR\" update-index --no-skip-worktree --no-assume-unchanged -r ."
+  fi
+  printf "\n  日志：%s\n" "$REPORT"; exit 0
+fi
+
+# ─────────────────────────── STATUS 模式 ───────────────────────────
+if [ "$STATUS" = "1" ]; then
+  H "STATUS · 框架侧当前改动（只读）"
+  framework_ready || die "框架目录不存在：$FRAMEWORK_DIR"
+
+  printf "  框架 commit：%s\n" "$(git -C "$FRAMEWORK_DIR" rev-parse HEAD 2>/dev/null)"
+  printf "  lock 约定：  %s\n" "$FRAMEWORK_COMMIT"
+  printf "\n"
+
+  DIRTY="$(git -C "$FRAMEWORK_DIR" status --porcelain)"
+  if [ -z "$DIRTY" ]; then
+    ok "框架工作区干净 —— 当前没有任何被脚本写入的内容"
+  else
+    N="$(printf '%s\n' "$DIRTY" | wc -l)"
+    act "共 $N 项改动："
+    printf '%s\n' "$DIRTY" | sed 's/^/      /'
+    printf "\n"
+    dim "M=已修改  A=新增(已暂存)  ??=未追踪"
+    dim "提示：未追踪项如果是 build/ 下的产物，属正常（框架 .gitignore 已忽略 build/）"
+  fi
+
+  # 最近一次写前快照
+  LAST_SNAP="$(ls -1t "$LOG_DIR"/prewrite-*.sha1 2>/dev/null | head -1)"
+  if [ -n "$LAST_SNAP" ]; then
+    printf "\n"
+    act "最近一次写前快照：$LAST_SNAP"
+    head -20 "$LAST_SNAP" | sed 's/^/      /'
+  fi
+  printf "\n  日志：%s\n" "$REPORT"; exit 0
+fi
+
+# ══════════════════════════════════════════
+# 第 0 步 · 安全预检
+# ══════════════════════════════════════════
+H "第 0 步 / 安全预检"
+
+[ -f "$LOCK_FILE" ] || die "找不到 framework.lock（应在 $LOCK_FILE）"
+ok "framework.lock 已加载"
+[ -d "$CONTENT_DIR" ] || die "找不到 content/（应在 $CONTENT_DIR）"
+ok "content/ 已加载"
+
+framework_ready || die "框架目录不存在：$FRAMEWORK_DIR
+      先克隆：git clone --recursive $FRAMEWORK_REPO \"$FRAMEWORK_DIR\""
+
+DIRTY="$(git -C "$FRAMEWORK_DIR" status --porcelain)"
+if [ -n "$DIRTY" ]; then
+  warn "框架工作区**不干净** —— 可能有未纳管的手改："
+  printf '%s\n' "$DIRTY" | sed 's/^/      /'
+  printf "\n"
+  dim "如果是上次脚本铺的内容 → 正常，继续即可（本次会重新铺一遍）"
+  dim "如果多数文件你没印象 → 警惕，先跑 RESTORE=1 归零再重来"
+  printf "\n  %s→ 继续？(y/N) %s" "$c_yellow" "$c_off"
+  read -r ans
+  case "$ans" in y|Y) ;; *) bad "已中止"; exit 1 ;; esac
+else
+  ok "框架工作区干净"
+fi
+
+# ══════════════════════════════════════════
+# 第 1 步 · 校验 commit
+# ══════════════════════════════════════════
+H "第 1 步 / 校验框架 commit（对照 framework.lock）"
+
+REAL_COMMIT="$(git -C "$FRAMEWORK_DIR" rev-parse HEAD 2>/dev/null)"
+printf "  lock 约定：%s\n" "$FRAMEWORK_COMMIT"
+printf "  实际：    %s\n" "$REAL_COMMIT"
+
+if [ "$REAL_COMMIT" = "$FRAMEWORK_COMMIT" ]; then
+  ok "commit 匹配（$FRAMEWORK_SUBJECT）"
+else
+  bad "commit 不匹配！"
+  dim "若需升级：cd $FRAMEWORK_DIR && git fetch origin && git checkout $FRAMEWORK_COMMIT"
+  dim "  然后同步改 framework.lock 的 [framework] commit 才继续"
+  dim "若需回退到 lock 版本：在上述命令基础上加 git submodule update --init --recursive"
+  die "框架版本与 lock 不一致，已中止（防止内容铺到未知版本上）"
+fi
+
+# 子模块校验
+if [ -f "$FRAMEWORK_DIR/.gitmodules" ]; then
+  MG_STATUS="$(git -C "$FRAMEWORK_DIR" submodule status --recursive 2>/dev/null | head -1)"
+  MG_GOT="$(printf '%s' "$MG_STATUS" | awk '{print $1}' | tr -d '+-')"
+  printf "  子模块 mgfembp：lock=%s 实际=%s\n" "$MG_COMMIT" "$MG_GOT"
+  if [ "$MG_GOT" = "$MG_COMMIT" ]; then
+    ok "子模块 commit 匹配"
+  else
+    warn "子模块 commit 不匹配（可能未拉取或已漂移）"
+    dim "修复：git -C $FRAMEWORK_DIR submodule update --init --recursive"
+  fi
+  if [ -f "$FRAMEWORK_DIR/$MG_PROBE" ]; then
+    ok "子模块探针文件存在（$MG_PROBE）"
+  else
+    bad "子模块探针缺失（$MG_PROBE）→ 子模块未真正拉下来"
+    dim "修复：git -C $FRAMEWORK_DIR submodule update --init --recursive"
+    die "子模块未就绪，构建必然失败"
+  fi
+fi
+
+# ══════════════════════════════════════════
+# 第 2 步 · 写前快照
+# ══════════════════════════════════════════
+H "第 2 步 / 写前快照（记录将被改写文件的 SHA1）"
+
+# 将被改写的路径（相对框架根）
+TARGETS_FILE="$(mktemp)"
+{
+  # data/ 下所有同名 JSON（合并目标）
+  if [ -d "$CONTENT_DIR/data" ]; then
+    find "$CONTENT_DIR/data" -maxdepth 1 -name '*.json' -printf '%f\n' 2>/dev/null \
+      | while read -r f; do [ -f "$FRAMEWORK_DIR/src/data/$f" ] && printf 'src/data/%s\n' "$f"; done
+  fi
+  # src/ 下将新增的 .c
+  if [ -d "$CONTENT_DIR/src" ]; then
+    find "$CONTENT_DIR/src" -maxdepth 1 -name '*.c' -printf 'src/shanhe_%f\n' 2>/dev/null
+  fi
+} | sort -u > "$TARGETS_FILE"
+
+if [ "$DRY_RUN" = "1" ]; then
+  act "[预演] 将记录以下文件的 SHA1 快照："
+  sed 's/^/      /' "$TARGETS_FILE"
+else
+  : > "$PREWRITE_SNAPSHOT"
+  while read -r rel; do
+    [ -z "$rel" ] && continue
+    if [ -f "$FRAMEWORK_DIR/$rel" ]; then
+      ( cd "$FRAMEWORK_DIR" && sha1sum "$rel" ) >> "$PREWRITE_SNAPSHOT"
+    else
+      printf 'MISSING  %s\n' "$rel" >> "$PREWRITE_SNAPSHOT"
+    fi
+  done < "$TARGETS_FILE"
+  ok "快照已写入 $PREWRITE_SNAPSHOT（$(wc -l < "$PREWRITE_SNAPSHOT") 行）"
+fi
+
+# ══════════════════════════════════════════
+# 第 3 步 · 铺设
+# ══════════════════════════════════════════
+H "第 3 步 / 铺设（合并 content/ → 框架）"
+
+MERGED_COUNT=0
+SKIPPED_COUNT=0
+
+# ── 3a. data/*.json 按语义合并 ──
+merge_json() {
+  local name="$1" src="$CONTENT_DIR/data/$1" dst="$FRAMEWORK_DIR/src/data/$1"
+  if [ ! -f "$dst" ]; then
+    warn "[$name] 框架侧无此文件，跳过（原创新表需人工确认落点）"
+    SKIPPED_COUNT=$((SKIPPED_COUNT+1)); return 0
+  fi
+  python3 - "$src" "$dst" "$name" "$DRY_RUN" <<'PY'
+import json, sys, copy
+src, dst, name, dry = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+
+with open(src, encoding="utf-8") as f: patch = json.load(f)
+with open(dst, encoding="utf-8") as f: base  = json.load(f)
+
+def die(msg):
+    print(f"  \033[0;31m✗\033[0m [{name}] {msg}"); sys.exit(2)
+
+# ---------- characters.json 专用：符号名/槽位号 双键合并 ----------
+if name == "characters.json":
+    if "characters" not in base or not isinstance(base["characters"], list):
+        die("框架表结构异常：缺 characters 数组")
+    slots = base["characters"]
+
+    # 权威槽位模型（scripts/generated_data/characters/schema.py docstring）：
+    #   · 1-based designator 1..256 → 槽位 [designator - 1]
+    #   · 具名记录（character 键）→ designator = characters.h 里该常量的数值
+    #   · 原始记录（characterId 键）→ designator = 该整数本身
+    #   · ★ 两者互斥：一条记录只能有其中一个（schema.py:533 硬校验）
+    def key_of(rec):
+        if "character" in rec and "characterId" in rec:
+            die("记录同时有 character 与 characterId —— schema 要求「exactly one」")
+        if "character" in rec:   return ("character", rec["character"])
+        if "characterId" in rec: return ("characterId", rec["characterId"])
+        return None
+
+    # 建索引（用框架原表的键，保证替换时键类型一致）
+    idx_by_key = {}
+    for i, rec in enumerate(slots):
+        k = key_of(rec)
+        if k is None:
+            die(f"框架槽位 {i} 键缺失（既无 character 也无 characterId）")
+        idx_by_key[k] = i
+    # 冗余校验：characterId 是否恒等于下标 + 1（形态 B 的 1-based 约定）
+    for k, i in idx_by_key.items():
+        if k[0] == "characterId" and k[1] != i + 1:
+            die(f"槽位断言失败：下标 {i} 的 characterId={k[1]}，期望 {i+1}（表结构已变，中止以防静默错位）")
+
+    # 应用补丁：按「同键类型 + 同键值」替换
+    applied = []
+    for entry in patch.get("characters", []):
+        if not isinstance(entry, dict):
+            die("补丁条目不是对象")
+        k = key_of(entry)
+        if k is None:
+            die("补丁条目缺 character / characterId（无法定位槽位）")
+        if k not in idx_by_key:
+            # 不在原表里 → 是新增。但 characters 是 256 全满表，新增无处可放
+            die(f"补丁键 {k[0]}={k[1]} 不在框架原表中 —— "
+                f"characters.json 是 256 槽全满表，原创角色应『复用被顶替者的符号名』，不能新增键")
+        i = idx_by_key[k]
+        old = slots[i].get("character") or f"<characterId={slots[i].get('characterId')}>"
+        slots[i] = copy.deepcopy(entry)
+        applied.append(f"{old}（槽位 {i+1}）→ 已替换")
+    print(f"  \033[0;32m✓\033[0m [merge] {name} 替换 {len(applied)} 条（256 槽保持全覆盖）")
+    for a in applied[:20]: print(f"        · {a}")
+    if len(applied) > 20: print(f"        … 其余 {len(applied)-20} 条略")
+    result = base
+
+# ---------- 通用：数组表按定位键合并 ----------
+else:
+    # 找出补丁与基底共有的「数组字段」
+    def find_list(d):
+        for k, v in d.items():
+            if isinstance(v, list) and v and isinstance(v[0], dict):
+                return k
+        return None
+    lk = find_list(patch) or find_list(base)
+    if lk is None:
+        die("无法识别数组字段（patch 与 base 都没有对象数组）")
+    lst = base.get(lk, [])
+    # 定位键：优先同名字段
+    def key_of(rec):
+        for cand in ("character","class","item","support","id","name","symbol"):
+            if cand in rec: return cand
+        return None
+    applied = 0
+    for entry in patch.get(lk, []):
+        k = key_of(entry)
+        if k is None:
+            die(f"补丁条目无可用定位键（试过 character/class/item/support/id/name/symbol）")
+        found = False
+        for i, rec in enumerate(lst):
+            if rec.get(k) == entry[k]:
+                lst[i] = copy.deepcopy(entry); applied += 1; found = True; break
+        if not found:
+            lst.append(copy.deepcopy(entry)); applied += 1
+    base[lk] = lst
+    print(f"  \033[0;32m✓\033[0m [merge] {name} 列表 '{lk}' 应用 {applied} 条")
+    result = base
+
+# ---------- 写回（含框架自身的 4 空格缩进风格） ----------
+out = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+if dry:
+    print(f"        [预演] 未写入 {dst}")
+else:
+    with open(dst, "w", encoding="utf-8") as f: f.write(out)
+PY
+}
+
+if [ -d "$CONTENT_DIR/data" ] && [ -n "$(ls -A "$CONTENT_DIR/data" 2>/dev/null)" ]; then
+  for f in "$CONTENT_DIR/data"/*.json; do
+    [ -f "$f" ] || continue
+    name="$(basename "$f")"
+    if [ "$DRY_RUN" = "1" ]; then
+      act "[预演] 合并 data/$name → src/data/$name"
+    else
+      merge_json "$name" || die "合并 $name 失败"
+    fi
+    MERGED_COUNT=$((MERGED_COUNT+1))
+  done
+else
+  dim "content/data/ 为空 —— 无非原创数据可合并（M1 阶段正常）"
+fi
+
+# ── 3a'. 合并后立即用框架自身的 schema 校验（快速失败） ──
+#
+# ★ 2026-09-26 审计修正（两次校验，语义不同，都要跑）：
+#   · 第 1 道 validate --no-roundtrip：只验「数据本身」是否合法
+#     （字段类型 / 符号引用 / 容量 / 跨表依赖）。这是**我们铺的内容**
+#     该过的一关，失败 = 真错误，必须修。
+#   · 第 2 道 generate --no-roundtrip 干跑：验「能否产出 C」。框架的
+#     生成器对锁定表（characters/classes/items/supports）会强制
+#     round-trip 比对 src/data_<表>.c，而该手写文件**不在**我们的
+#     content/ 覆盖范围内 → 裸 make 必然 Error 1。这里提前暴露，
+#     避免用户等到编译到一半才发现。
+#   → 详见 docs/6.方案B内容外置规划.md §3.4 与 docs/11.M1骨架验证记录.md §6
+if [ "$DRY_RUN" != "1" ] && [ "$MERGED_COUNT" -gt 0 ]; then
+  if [ -d "$FRAMEWORK_DIR/scripts/generated_data" ]; then
+    act "schema 预校验（在构建前快速失败，避免错误埋到编译深处）…"
+    VD_LOG="$LOG_DIR/validate-$STAMP.log"
+    ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data validate \
+        --table characters --source src/data/characters.json --no-roundtrip ) > "$VD_LOG" 2>&1
+    if [ $? -eq 0 ]; then
+      ok "① 数据本身合法（字段/引用/容量/跨表依赖全过）"
+    else
+      bad "① 数据本身非法 —— 常见原因："
+      dim "· 记录同时有 character 与 characterId（schema 要求「exactly one」）"
+      dim "· character 用了 characters.h 未定义的符号名（原创角色须复用被顶替者的符号名）"
+      dim "· baseRanks 的键不是 ITYPE_* / 值不是 WPN_EXP_* 字符串"
+      dim "· attributes 不是字符串数组；affinity 不是 UNIT_AFFIN_*"
+      dim "· defaultClass 不是 CLASS_*（须在 classes 表里存在）"
+      printf "\n"
+      tail -20 "$VD_LOG" | sed 's/^/      /'
+      dim "完整日志：$VD_LOG"
+      die "schema 预校验未通过，未进行构建"
+    fi
+
+    # 第 2 道：干跑生成器（与 make 的硬依赖同参数），提前暴露 round-trip 拦截
+    GEN_LOG="$LOG_DIR/generate-dryrun-$STAMP.log"
+    ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data generate \
+        --table characters --source src/data/characters.json \
+        --out-dir /tmp/shanhe-gen-probe ) > "$GEN_LOG" 2>&1
+    if [ $? -eq 0 ]; then
+      ok "② 生成器干跑通过（该表可产出 C，make 不会卡）"
+    else
+      bad "② 生成器干跑失败 —— 多半是 round-trip 拦截（不是数据错）"
+      dim "含义：你改了 src/data/characters.json，但框架侧手写参考"
+      dim "      src/data_characters.c 没同步 → 生成器拒绝产出 C"
+      dim "      → 后续 make 会以 generated_data.mk:685 Error 1 中止"
+      printf "\n"
+      tail -6 "$GEN_LOG" | sed 's/^/      /'
+      dim "完整日志：$GEN_LOG"
+      warn "继续构建的话**必然失败**。建议先跑 RESTORE=1 还原框架再决定。"
+      die "生成器干跑未通过，未进行构建（这正是 round-trip 约束在起作用）"
+    fi
+    rm -rf /tmp/shanhe-gen-probe
+  fi
+fi
+
+# ── 3b. texts/ 合并 ──
+if [ -d "$CONTENT_DIR/texts" ] && [ -n "$(find "$CONTENT_DIR/texts" -type f -not -name '.gitkeep' 2>/dev/null)" ]; then
+  while IFS= read -r rel; do
+    src="$CONTENT_DIR/texts/$rel"; dst="$FRAMEWORK_DIR/texts/$rel"
+    if [ "$DRY_RUN" = "1" ]; then
+      act "[预演] 铺设 texts/$rel → texts/$rel"
+    else
+      mkdir -p "$(dirname "$dst")"
+      cp "$src" "$dst"
+      act "[copy] texts/$rel"
+    fi
+    MERGED_COUNT=$((MERGED_COUNT+1))
+  done < <(cd "$CONTENT_DIR/texts" && find . -type f -not -name '.gitkeep' | sed 's|^\./||')
+else
+  dim "content/texts/ 为空 —— 无原创文本可铺设（M1 阶段正常）"
+fi
+
+# ── 3c. src/*.c 铺为 src/shanhe_*.c ──
+SRC_ADDED=0
+if [ -d "$CONTENT_DIR/src" ] && [ -n "$(ls -A "$CONTENT_DIR/src" 2>/dev/null | grep -v '^\.gitkeep$')" ]; then
+  for f in "$CONTENT_DIR/src"/*.c; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    # 铁律：统一 shanhe_ 前缀（防同名静默替换上游 expansion_*.c）
+    case "$base" in
+      shanhe_*) out="$base" ;;
+      *)        out="shanhe_$base" ;;
+    esac
+    # 排除清单（Makefile:132-137 明确排除的 6 名，同名会被剔除）
+    case "$out" in
+      action_semantics.c|expansion_log.c|expansion_autoplay.c|expansion_chapter_objectives.c|expansion_autoplay_strategies.c|expansion_blue_phase_delegate.c)
+        bad "src/$out 与框架排除清单冲突，跳过"; continue ;;
+    esac
+    if [ "$DRY_RUN" = "1" ]; then
+      act "[预演] 铺设 src/$base → src/$out"
+    else
+      cp "$f" "$FRAMEWORK_DIR/src/$out"
+      act "[copy] src/$base → src/$out"
+    fi
+    SRC_ADDED=$((SRC_ADDED+1))
+  done > /dev/null 2>&1 || true
+  # 重新打印（上面的 act 已写日志，这里补屏幕输出）
+  SRCS="$(ls "$CONTENT_DIR/src"/*.c 2>/dev/null | wc -l)"
+  if [ "$SRCS" -gt 0 ]; then
+    if [ "$DRY_RUN" = "1" ]; then
+      dim "共 $SRCS 个 .c 待铺设（上方已逐条列出）"
+    else
+      ok "共 $SRC_ADDED 个 .c 已铺入 src/"
+      ok "已 touch Makefile（wildcard 解析期展开，必须触发生成器重扫）"
+      touch "$FRAMEWORK_DIR/Makefile"
+    fi
+  fi
+else
+  dim "content/src/ 为空 —— 无原创 C 代码可铺设（M1 阶段正常）"
+fi
+
+# ── 3d. assets 提示 ──
+if [ -d "$CONTENT_DIR/assets" ] && [ -n "$(find "$CONTENT_DIR/assets" -type f -not -name '.gitkeep' 2>/dev/null)" ]; then
+  warn "content/assets/ 有文件 —— 资产需按其「拥有缝」登记（见 docs/8），"
+  dim "当前脚本只做提示，不做资产登记（四动词管线：make assets-validate/-generate/-check/-test）"
+fi
+
+act "铺设完成：合并/铺设 $MERGED_COUNT 项，跳过 $SKIPPED_COUNT 项"
+
+# ══════════════════════════════════════════
+# 第 4 步 · 构建
+# ══════════════════════════════════════════
+H "第 4 步 / 构建"
+
+if [ "$DRY_RUN" = "1" ]; then
+  act "[预演] 将执行：cd $FRAMEWORK_DIR && make $MAKE_TARGET"
+  dim "（含宿主机工具保障：tools/{aif2pcm,bin2c,gbagfx,jsonproc,mid2agb,preproc,scaninc,textencode}）"
+elif [ "$SKIP_BUILD" = "1" ]; then
+  warn "SKIP_BUILD=1 —— 跳过构建"
+else
+  # 宿主机工具预构建（头号真凶，见 docs/7）
+  act "预构建宿主机工具（8 个）…"
+  for d in aif2pcm bin2c gbagfx jsonproc mid2agb preproc scaninc textencode; do
+    if [ -d "$FRAMEWORK_DIR/tools/$d" ] && [ ! -x "$FRAMEWORK_DIR/tools/$d/$d" ]; then
+      make -C "$FRAMEWORK_DIR/tools/$d" >/dev/null 2>&1 \
+        && dim "tools/$d ✓" || warn "tools/$d 构建失败（可能不影响）"
+    fi
+  done
+  ok "宿主机工具就绪"
+
+  BUILD_LOG="$LOG_DIR/build-$STAMP.log"
+  act "make $MAKE_TARGET（日志：$BUILD_LOG）"
+  dim "首次/改表后编译较慢，请耐心…"
+  ( cd "$FRAMEWORK_DIR" && make "$MAKE_TARGET" ) > "$BUILD_LOG" 2>&1
+  RC=$?
+  if [ $RC -eq 0 ]; then
+    ok "构建成功"
+  else
+    bad "构建失败（exit $RC）"
+    dim "最后 25 行日志："
+    tail -25 "$BUILD_LOG" | sed 's/^/      /'
+    dim "完整日志：$BUILD_LOG"
+    die "构建失败"
+  fi
+fi
+
+# ══════════════════════════════════════════
+# 第 5 步 · 验产物（自建五项，不用上游 boot-check）
+# ══════════════════════════════════════════
+H "第 5 步 / 验产物（自建校验）"
+
+if [ "$DRY_RUN" = "1" ] || [ "$SKIP_BUILD" = "1" ]; then
+  act "[跳过] 未构建，不验产物"
+else
+  # ① ROM 存在
+  if [ -f "$FRAMEWORK_ROM" ]; then
+    ok "① ROM 存在：$FRAMEWORK_ROM"
+  else
+    die "① ROM 不存在：$FRAMEWORK_ROM"
+  fi
+
+  # ② 尺寸
+  SIZE="$(stat -c %s "$FRAMEWORK_ROM" 2>/dev/null)"
+  if [ "$SIZE" = "$ROM_BYTES" ]; then
+    ok "② 尺寸正确：$SIZE 字节（$(lock_get build rom_size_label)）"
+  else
+    die "② 尺寸错误：$SIZE（期望 $ROM_BYTES）"
+  fi
+
+  # ③ header
+  TITLE="$(dd if="$FRAMEWORK_ROM" bs=1 skip=160 count=12 2>/dev/null | tr -d '\0')"
+  CODE="$(dd if="$FRAMEWORK_ROM" bs=1 skip=172 count=4 2>/dev/null | tr -d '\0')"
+  if [ "$TITLE" = "$TITLE_EXPECT" ] && [ "$CODE" = "$CODE_EXPECT" ]; then
+    ok "③ header 正确：'$TITLE' / '$CODE'"
+  else
+    die "③ header 错误：'$TITLE' / '$CODE'（期望 '$TITLE_EXPECT' / '$CODE_EXPECT'）"
+  fi
+
+  # ④ 可引导（mGBA 无头启动，不比对像素）
+  if command -v mgba-sdl >/dev/null 2>&1 || [ -x /usr/games/mgba-sdl ]; then
+    MG="$(command -v mgba-sdl || echo /usr/games/mgba-sdl)"
+    timeout 12 "$MG" -l 0 -C "frames=60" "$FRAMEWORK_ROM" >/dev/null 2>&1
+    RC=$?
+    if [ $RC -eq 0 ] || [ $RC -eq 124 ]; then
+      ok "④ 可引导（mGBA 跑 60 帧无崩溃）"
+    else
+      warn "④ mGBA 退出码 $RC（可能只是无头模式限制，建议人工目视确认）"
+    fi
+  else
+    warn "④ 无 mgba-sdl，跳过可引导检查（Windows 侧用 mGBA 目视）"
+  fi
+
+  # ⑤ 中文字形（粗检：ROM 内应含字库段；精检需实机）
+  CN_SIZE="$(stat -c %s "$FRAMEWORK_ROM")"
+  if [ "$CN_SIZE" -gt 20000000 ]; then
+    ok "⑤ 已启用中文（ROM ≥ 32M，含 locale bank）—— 请用 mGBA 目视确认汉字"
+  else
+    warn "⑤ ROM 偏小，可能未启用中文 locale（检查 config.autotools.mk）"
+  fi
+
+  ROM_SHA1="$(sha1sum "$FRAMEWORK_ROM" | cut -c1-8)"
+  act "产物 SHA1（前 8 位）：$ROM_SHA1  ·  基线中文版：$(lock_get baseline baseline_cn_rom_sha1)"
+  dim "改内容后 SHA1 本就该变 —— 这一步是记录，不是门禁"
+fi
+
+# ══════════════════════════════════════════
+# 第 6 步 · 反查
+# ══════════════════════════════════════════
+H "第 6 步 / 反查框架侧改动（防呆关键）"
+
+if [ "$DRY_RUN" = "1" ]; then
+  act "[预演] 将比对 git status 与第 2 步快照，高亮「预期外」改动"
+else
+  CUR="$(mktemp)"
+  git -C "$FRAMEWORK_DIR" status --porcelain > "$CUR"
+
+  if [ ! -s "$CUR" ]; then
+    warn "框架侧无任何改动 —— 若你确实铺了内容，说明铺设没生效（检查 content/ 是否为空）"
+  else
+    act "框架侧改动清单："
+    sed 's/^/      /' "$CUR"
+    printf "\n"
+
+    # 与快照对比：快照里没有的 = 预期外
+    # git porcelain 格式：XY<空格>path（X/Y 各 1 列，可能是空格）
+    UNEXPECTED=0
+    while read -r line; do
+      [ -z "$line" ] && continue
+      # 从第 4 个字符起取路径（XY + 空格 = 3 字符前缀）
+      path="${line:3}"
+      case "$path" in
+        src/data/*|texts/*|src/shanhe_*.c|Makefile) ;;   # 预期（脚本铺设目标）
+        build/*|*/build/*) ;;                             # 构建产物，正常
+        *)
+          printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
+          UNEXPECTED=$((UNEXPECTED+1))
+          ;;
+      esac
+    done < "$CUR"
+
+    if [ "$UNEXPECTED" -eq 0 ]; then
+      ok "反查通过：所有改动都在预期范围内（src/data/、texts/、src/shanhe_*.c、Makefile、build/）"
+    else
+      warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
+      dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"
+    fi
+  fi
+  rm -f "$CUR"
+fi
+
+# ─────────────────────────── 收尾 ───────────────────────────
+printf "\n%s━━━━━━ 完成 ━━━━━━%s\n" "$c_green" "$c_off"
+if [ "$DRY_RUN" = "1" ]; then
+  printf "  %s预演结束，未落盘%s\n" "$c_yellow" "$c_off"
+else
+  printf "  产物：%s\n" "$FRAMEWORK_ROM"
+  printf "  日志：%s\n" "$REPORT"
+  printf "  快照：%s\n" "$PREWRITE_SNAPSHOT"
+  printf "\n  下一步：\n"
+  printf "    · 查看框架被改了什么   → bash tools/shanhe-build.sh STATUS=1\n"
+  printf "    · 一键还原框架         → bash tools/shanhe-build.sh RESTORE=1\n"
+  printf "    · 实机试玩             → mGBA 打开上述 ROM\n"
+fi
+exit 0
