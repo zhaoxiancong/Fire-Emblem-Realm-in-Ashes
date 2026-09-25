@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 660" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>33 个原版可玩角色槽位 · 分配全景</title>
+  <desc>《山河烬》22 名原创角色对《圣魔之光石》33 个可玩角色槽位的分配图，含 11 个预留槽位。</desc>
+  <rect width="680" height="660" fill="#ffffff"/>
+
+  <text x="24" y="34" font-size="17" font-weight="700" fill="#1f2328">33 个原版可玩角色槽位 · 分配全景</text>
+  <text x="24" y="56" font-size="12" fill="#57606a">按原版立绘 ID 排列 · 前 22 个为《山河烬》原创角色占用 · 后 11 个预留</text>
+
+  <!-- 图例 -->
+  <rect x="24" y="72" width="12" height="12" rx="3" fill="#0969da"/>
+  <text x="42" y="83" font-size="11.5" fill="#24292f">已分配（22）</text>
+  <rect x="150" y="72" width="12" height="12" rx="3" fill="#eaeef2" stroke="#d0d7de"/>
+  <text x="168" y="83" font-size="11.5" fill="#24292f">预留（11）</text>
+  <rect x="270" y="72" width="12" height="12" rx="3" fill="#bf8700"/>
+  <text x="288" y="83" font-size="11.5" fill="#24292f">本次调整</text>
+  <rect x="380" y="72" width="12" height="12" rx="3" fill="#1a7f37"/>
+  <text x="398" y="83" font-size="11.5" fill="#24292f">★ 完美匹配</text>
+
+  <!-- 行 1 -->
+  <g font-size="11">
+    <rect x="24" y="102" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="32" y="120" fill="#ffffff" font-weight="700">虞聪</text>
+    <text x="32" y="137" fill="#cae8ff" font-size="10">艾莉卡 · 2 · 剑主</text>
+
+    <rect x="182" y="102" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="190" y="120" fill="#ffffff" font-weight="700">秦红缨</text>
+    <text x="190" y="137" fill="#cae8ff" font-size="10">艾夫拉姆 · 20 · 枪主</text>
+
+    <rect x="340" y="102" width="150" height="46" rx="6" fill="#1a7f37"/>
+    <text x="348" y="120" fill="#ffffff" font-weight="700">胡九儿</text>
+    <text x="348" y="137" fill="#dafbe1" font-size="10">缪尔 · 38 · 龙人变身</text>
+
+    <rect x="498" y="102" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="506" y="120" fill="#ffffff" font-weight="700">姬瑶</text>
+    <text x="506" y="137" fill="#cae8ff" font-size="10">凡妮莎 · 8 · 飞马</text>
+  </g>
+
+  <!-- 行 2 -->
+  <g font-size="11">
+    <rect x="24" y="156" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="32" y="174" fill="#ffffff" font-weight="700">沈婉莹</text>
+    <text x="32" y="191" fill="#cae8ff" font-size="10">拉切尔 · 34 · 骑马修女</text>
+
+    <rect x="182" y="156" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="190" y="174" fill="#ffffff" font-weight="700">阿蘅</text>
+    <text x="190" y="191" fill="#cae8ff" font-size="10">娜塔莎 · 17 · 修女</text>
+
+    <rect x="340" y="156" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="348" y="174" fill="#ffffff" font-weight="700">石阿满</text>
+    <text x="348" y="191" fill="#cae8ff" font-size="10">伊奈斯 · 15 · 高阶弓</text>
+
+    <rect x="498" y="156" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="506" y="174" fill="#ffffff" font-weight="700">谢危楼</text>
+    <text x="506" y="191" fill="#cae8ff" font-size="10">约书亚 · 42 · 剑士</text>
+  </g>
+
+  <!-- 行 3 -->
+  <g font-size="11">
+    <rect x="24" y="210" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="32" y="228" fill="#ffffff" font-weight="700">燕不归</text>
+    <text x="32" y="245" fill="#cae8ff" font-size="10">弗朗茨 · 6 · 骑兵</text>
+
+    <rect x="182" y="210" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="190" y="228" fill="#ffffff" font-weight="700">慕晚晴</text>
+    <text x="190" y="245" fill="#cae8ff" font-size="10">阿米莉亚 · 25 · 女枪骑</text>
+
+    <rect x="340" y="210" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="348" y="228" fill="#ffffff" font-weight="700">裴松年</text>
+    <text x="348" y="245" fill="#cae8ff" font-size="10">吉利亚姆 · 5 · 重甲</text>
+
+    <rect x="498" y="210" width="150" height="46" rx="6" fill="#1a7f37"/>
+    <text x="506" y="228" fill="#ffffff" font-weight="700">虞旻</text>
+    <text x="506" y="245" fill="#dafbe1" font-size="10">杜塞尔 · 37 · 高阶重甲</text>
+  </g>
+
+  <!-- 行 4 -->
+  <g font-size="11">
+    <rect x="24" y="264" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="32" y="282" fill="#ffffff" font-weight="700">邓阿七</text>
+    <text x="32" y="299" fill="#cae8ff" font-size="10">加西亚 · 14 · 斗士</text>
+
+    <rect x="182" y="264" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="190" y="282" fill="#ffffff" font-weight="700">雷万钧</text>
+    <text x="190" y="299" fill="#cae8ff" font-size="10">多兹拉 · 35 · 狂战士</text>
+
+    <rect x="340" y="264" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="348" y="282" fill="#ffffff" font-weight="700">云虚道人</text>
+    <text x="348" y="299" fill="#cae8ff" font-size="10">尤恩 · 33 · 少年法师</text>
+
+    <rect x="498" y="264" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="506" y="282" fill="#ffffff" font-weight="700">洛清霜</text>
+    <text x="506" y="299" fill="#cae8ff" font-size="10">露特 · 16 · 女法师</text>
+  </g>
+
+  <!-- 行 5 -->
+  <g font-size="11">
+    <rect x="24" y="318" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="32" y="336" fill="#ffffff" font-weight="700">阿蛮</text>
+    <text x="32" y="353" fill="#cae8ff" font-size="10">诺尔 · 41 · 暗法师</text>
+
+    <rect x="182" y="318" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="190" y="336" fill="#ffffff" font-weight="700">温子墨</text>
+    <text x="190" y="353" fill="#cae8ff" font-size="10">阿图尔 · 26 · 光法师</text>
+
+    <rect x="340" y="318" width="150" height="46" rx="6" fill="#bf8700"/>
+    <text x="348" y="336" fill="#ffffff" font-weight="700">白鹿鸣 ⬅️</text>
+    <text x="348" y="353" fill="#fff8c5" font-size="10">罗斯 · 9 · 少年位</text>
+
+    <rect x="498" y="318" width="150" height="46" rx="6" fill="#bf8700"/>
+    <text x="506" y="336" fill="#ffffff" font-weight="700">闻人夜 ⬅️</text>
+    <text x="506" y="353" fill="#fff8c5" font-size="10">萨列 · 32 · 高阶法系</text>
+  </g>
+
+  <!-- 行 6 -->
+  <g font-size="11">
+    <rect x="24" y="372" width="150" height="46" rx="6" fill="#bf8700"/>
+    <text x="32" y="390" fill="#ffffff" font-weight="700">柴多福 ⬅️</text>
+    <text x="32" y="407" fill="#fff8c5" font-size="10">雷诺克 · 36 · 开锁游荡</text>
+
+    <rect x="182" y="372" width="150" height="46" rx="6" fill="#0969da"/>
+    <text x="190" y="390" fill="#ffffff" font-weight="700">柳青鸾</text>
+    <text x="190" y="407" fill="#cae8ff" font-size="10">科尔姆 · 12 · 盗贼</text>
+
+    <rect x="340" y="372" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="348" y="390" fill="#57606a" font-weight="700">塞思 · 4</text>
+    <text x="348" y="407" fill="#8c959f" font-size="10">圣骑士 · 预留</text>
+
+    <rect x="498" y="372" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="506" y="390" fill="#57606a" font-weight="700">福德 · 22</text>
+    <text x="506" y="407" fill="#8c959f" font-size="10">骑兵 · 预留</text>
+  </g>
+
+  <!-- 行 7 -->
+  <g font-size="11">
+    <rect x="24" y="426" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="32" y="444" fill="#57606a" font-weight="700">凯尔 · 24</text>
+    <text x="32" y="461" fill="#8c959f" font-size="10">骑兵 · 预留</text>
+
+    <rect x="182" y="426" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="190" y="444" fill="#57606a" font-weight="700">希琳 · 43</text>
+    <text x="190" y="461" fill="#8c959f" font-size="10">高阶飞马 · 预留</text>
+
+    <rect x="340" y="426" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="348" y="444" fill="#57606a" font-weight="700">塔娜 · 44</text>
+    <text x="348" y="461" fill="#8c959f" font-size="10">飞马 · 预留</text>
+
+    <rect x="498" y="426" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="506" y="444" fill="#57606a" font-weight="700">库加 · 19</text>
+    <text x="506" y="461" fill="#8c959f" font-size="10">龙骑 · 预留</text>
+  </g>
+
+  <!-- 行 8 -->
+  <g font-size="11">
+    <rect x="24" y="480" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="32" y="498" fill="#57606a" font-weight="700">内米 · 10</text>
+    <text x="32" y="515" fill="#8c959f" font-size="10">女弓 · 预留</text>
+
+    <rect x="182" y="480" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="190" y="498" fill="#57606a" font-weight="700">莫尔德 · 7</text>
+    <text x="190" y="515" fill="#8c959f" font-size="10">神官 · 预留</text>
+
+    <rect x="340" y="480" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="348" y="498" fill="#57606a" font-weight="700">杰里克 · 27</text>
+    <text x="348" y="515" fill="#8c959f" font-size="10">佣兵 · 预留</text>
+
+    <rect x="498" y="480" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="506" y="498" fill="#57606a" font-weight="700">玛莉卡 · 30</text>
+    <text x="506" y="515" fill="#8c959f" font-size="10">女剑士 · 预留</text>
+  </g>
+
+  <!-- 行 9 -->
+  <g font-size="11">
+    <rect x="24" y="534" width="150" height="46" rx="6" fill="#eaeef2" stroke="#d0d7de"/>
+    <text x="32" y="552" fill="#57606a" font-weight="700">忒提斯 · 28</text>
+    <text x="32" y="569" fill="#8c959f" font-size="10">舞娘 · 预留</text>
+  </g>
+
+  <!-- 底部说明 -->
+  <line x1="24" y1="600" x2="656" y2="600" stroke="#d0d7de" stroke-width="1"/>
+  <text x="24" y="622" font-size="11.5" fill="#57606a">已分配 22 / 预留 11 = 33（原版双路线全部可玩角色）</text>
+  <text x="24" y="642" font-size="11.5" fill="#57606a">★ 完美匹配 4 对：虞聪 · 秦红缨（双主角位）· 胡九儿（非人少女）· 虞旻（跳反归队老将）</text>
+</svg>
