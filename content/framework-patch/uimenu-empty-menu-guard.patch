@@ -1,47 +1,43 @@
 # 山河烬 框架补丁: uimenu-empty-menu-guard
 #
-# 目标文件: src/uimenu.c  (框架只读依赖 -> 以 unified diff 形式最小化覆写)
+# 目标文件: src/uimenu.c   (框架只读依赖 -> 以 unified diff 形式最小化覆写)
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
-# 版本    : v2 (2026-09-25)  —— v1 只护住 Menu_OnInit, 实机随即在同族的
-#           ProcessMenuSelectInput 崩第二次 (LR=0x080BF0F7), 故改为根治.
+# 版本    : v4 (2026-09-25)
+#   v1 只护 Menu_OnInit            -> 立刻在 ProcessMenuSelectInput 崩第二次
+#   v2 改根治(占位预填充)          -> 又在 ProcessMenuDpadInput 崩第三次
+#   v3 补导航保护                  -> 不崩了, 但"空菜单"仍存在(显示不出来)
+#   v4 引擎层根因: 零项菜单直接 Proc_End  (#4/5)
 #
-# 修什么:
-#   教学关卡里 uimenu.c 有一族"不检查就解引用 menuItems[]"的缺陷. 当
-#   Menu_Setup 的填充循环一个项都没加 (所有条目 MENU_NOTSHOWN) 或只加了部分时,
-#   menuItems[] 里留着上一个 Proc 的残留数据, 被当成 MenuItemProc* 解引用,
-#   最终 bx 跳到非法地址. 实机两次复现:
-#     v1 前: PC=0x708E02B4 LR=0x080BE6D7  (Menu_OnInit)
-#     v1 后: PC=0xF846C0E6 LR=0x080BF0F7  (ProcessMenuSelectInput)
-#   同族站点共 8 处: Menu_OnInit / ProcessMenuSelectInput / Menu_AutoHelpBox_OnInit /
-#   Menu_AutoHelpBox_OnLoop / ProcessMenuDpadInput / GetMenuCursorPosition /
-#   RedrawMenu / ApplyMenuCursorVScroll.
+# 根因(源码级):
+#   src/events/prologue-tutorials.h  EventScr_Prologue_Tutorial5
+#     DISABLEOPTIONS(~EVENT_MENUOVERRIDE_ATTACK)   // 隐藏除「攻撃」外全部(含待機)
+#   src/bmmenu.c:2451  AttackCommandUsability
+#     if (gActiveUnit->state & US_HAS_MOVED) return MENU_NOTSHOWN;   // 已行动 -> 不可用
+#   => 两者叠加: 可见项 = 0  (一个合法状态)
+#   src/uimenu.c  Menu_Setup 得到 itemCount==0, menuItems[] 未写入(Proc 槽位复用不清零)
+#   => 后续任何 menuItems[...] 解引用读到残留垃圾 -> bx 跳到非法地址
 #
-# 怎么修 (根治, 而非逐点加保护):
-#   1) 定义"安全占位菜单项": def 指向全 NULL 回调的定义;
-#   2) Menu_Setup 填充前把 menuItems[] 全部预置为该占位项
-#      -> 所有解引用退化为 no-op, 8 处缺陷一次性挡住;
-#   3) 填充循环加 itemCount < MENU_ITEM_MAX 边界保护 (15 项 vs 11 格);
-#   4) Menu_OnInit 补 itemCount==0 早退 + itemCurrent 夹取.
+# 实机三次复现:
+#   PC=0x708E02B4 LR=0x080BE6D7   Menu_OnInit
+#   PC=0xF846C0E6 LR=0x080BF0F7   ProcessMenuSelectInput
+#   PC=0xD100D100 LR=0x080BEFDB   ProcessMenuDpadInput (itemCurrent 0-- 回绕成 255)
 #
-# 为什么从数据层修不了:
-#   itemCount==0 是 Menu_Setup 的合法输出; 缺陷在于消费者未做有效性检查.
+# 修法(5 处): (1)(2)(3) 预处理/边界 -> (4) 零项菜单 Proc_End [根因] -> (5) 导航防御
+#   (1)(2)(3)(5) 是防御纵深; 真正消除问题的是 (4): 让"零项菜单"这个非法状态不存在.
 #
-# 这是本项目的【已知偏离】(docs/6 §3.4g): 破了"框架只读"铁律.
-# 上游一旦改动该文件上下文, 本补丁会 apply 失败 -> 必须人工 rebase.
+# ⚠️ 上游修复到位后应删除本补丁. 上游若改动该文件上下文, apply 会失败 -> 人工 rebase.
+# 详见 docs/6 §3.4g / docs/5 §5.7.
 #
 --- a/src/uimenu.c
 +++ b/src/uimenu.c
-@@ -47,8 +47,18 @@
+@@ -47,8 +47,15 @@
  {
      PROC_BLOCK
  };
  
-+/* == shanhe PATCH: uimenu-empty-menu-guard (1/4) ==
-+ * 安全占位菜单项: 其 def 指向一个所有回调皆为 NULL 的定义.
-+ * 用途见 Menu_Setup 里的预填充 —— 让 menuItems[] 永远不会残留上一个 Proc 的垃圾.
-+ * 于是 uimenu.c 里所有 "menuItems[itemCurrent]->def->onX(...)" 的解引用
-+ * (Menu_OnInit / ProcessMenuSelectInput / Menu_AutoHelpBox_* 等共 8 处)
-+ * 在 itemCount==0 或部分填充时都退化为安全 no-op, 而不是野指针 bx 跳飞.
++/* == shanhe PATCH: uimenu-empty-menu-guard (1/5) ==
++ * 安全占位菜单项: def 指向全 NULL 回调的定义, 供 Menu_Setup 预填充.
++ * 防御纵深: 即使将来又出现未被覆盖的解引用点, 读到的也是 no-op 对象而非野指针.
 + */
 +static CONST_DATA struct MenuItemDef  sShanhePlaceholderMenuItemDef = {0};
 +static CONST_DATA struct MenuItemProc sShanhePlaceholderMenuItem    = { .def = &sShanhePlaceholderMenuItemDef };
@@ -50,17 +46,13 @@
  static void Menu_AutoHelpBox_OnLoop(struct MenuProc* proc);
  
  static CONST_DATA
-@@ -201,16 +211,29 @@
+@@ -201,16 +208,23 @@
  
      if (rect.h < 0)
          proc->state |= MENU_STATE_NOTSHOWN;
  
-+    /* shanhe PATCH: uimenu-empty-menu-guard (2/4)
-+     * 预填充安全占位项. 背景: Proc_Start 复用 proc 槽位时不清零, 若下面的循环
-+     * 一个项都没加 (所有条目 MENU_NOTSHOWN) 或只加了部分, menuItems[] 里就会留着
-+     * 上一个 Proc 的残留数据; 而 uimenu.c 多处不检查就解引用 -> 野指针跳飞
-+     * (实机复现: 教学关卡 Jumped to invalid address)。
-+     */
++    /* shanhe PATCH (2/5): 预填充安全占位项 —— Proc_Start 复用槽位不清零,
++     * 空/部分填充时 menuItems[] 会留着上一个 Proc 的残留数据并被解引用. */
 +    for (i = 0; i < MENU_ITEM_MAX; ++i)
 +        proc->menuItems[i] = (struct MenuItemProc*)&sShanhePlaceholderMenuItem;
 +
@@ -72,25 +64,30 @@
              availability = def->menuItems[i].isAvailable(&def->menuItems[i], i);
  
 -        if (availability != MENU_NOTSHOWN)
-+        /* shanhe PATCH: uimenu-empty-menu-guard (3/4) 边界保护
-+         * 单位菜单可多达 15 个条目, 而 menuItems[] 只有 MENU_ITEM_MAX=11 格;
-+         * 越过会写到紧跟其后的 itemCount/itemCurrent/itemPrevious/state 字段.
-+         */
++        /* shanhe PATCH (3/5): 边界保护 —— 条目可达 20 条, menuItems[] 仅 11 格,
++         * 越界会写到紧跟其后的 itemCount/itemCurrent/itemPrevious/state 字段. */
 +        if (availability != MENU_NOTSHOWN && itemCount < MENU_ITEM_MAX)
          {
              struct MenuItemProc* item = Proc_Start(sProc_MenuItem, proc);
              proc->menuItems[itemCount++] = item;
  
-@@ -300,8 +323,17 @@
+@@ -300,8 +314,24 @@
  {
      if (proc->def->onInit)
          proc->def->onInit(proc);
  
-+    /* shanhe PATCH: uimenu-empty-menu-guard (4/4)
-+     * itemCount==0 时直接返回 (此时没有"当前项"的概念), 并夹住越界索引.
++    /* == shanhe PATCH (4/5): 引擎层根因修法 —— 零项菜单不应存在 ==
++     * 成因: 教学内容(教学章 DISABLEOPTIONS(~ATTACK) 隐藏除攻撃外全部) 与
++     *       引擎判定(单位已行动时 AttackCommandUsability 返回 MENU_NOTSHOWN)
++     *       叠加, 会产生 itemCount == 0 的菜单 —— 此时 menuItems[] 一个字节都没写.
++     * 处理: 直接把该菜单 Proc 结束, 交还调用方(若是 Proc_StartBlocking 会自动解锁父级),
++     *       而不是留下一个空菜单对象给 8 处解引用去踩.
 +     */
 +    if (proc->itemCount == 0)
++    {
++        Proc_End(proc);
 +        return;
++    }
 +
 +    if (proc->itemCurrent >= proc->itemCount)
 +        proc->itemCurrent = 0;
@@ -98,4 +95,24 @@
      if (proc->menuItems[proc->itemCurrent]->def->onSwitchIn)
          proc->menuItems[proc->itemCurrent]->def->onSwitchIn(proc, proc->menuItems[proc->itemCurrent]);
  }
+ 
+@@ -428,8 +458,19 @@
+ }
+ 
+ void ProcessMenuDpadInput(struct MenuProc* proc)
+ {
++    /* shanhe PATCH (5/5): 防御纵深 —— 万一仍有空菜单存活, 也禁止导航.
++     * 原逻辑 itemCount==0 时按上键会走 "itemCurrent = itemCount; itemCurrent--;"
++     * 得到 255, 进而 menuItems[255] 越界 (实机复现 PC=0xD100D100 LR=0x080BEFDB).
++     */
++    if (proc->itemCount == 0)
++    {
++        proc->itemPrevious = 0;
++        proc->itemCurrent = 0;
++        return;
++    }
++
+     proc->itemPrevious = proc->itemCurrent;
+ 
+     // Handle Up keyin
  

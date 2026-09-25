@@ -16,7 +16,7 @@
   /tmp/shanhe-crash/watch.log       运行日志（PC 采样）
   /tmp/shanhe-crash/crash-site.txt  崩溃现场（若捕获）
 """
-import socket, time, os, sys
+import socket, time, os, sys, struct
 
 PORT      = int(os.environ.get("SHANHE_GDB_PORT", "2345"))
 HOST      = os.environ.get("SHANHE_GDB_HOST", "localhost")
@@ -42,6 +42,27 @@ def legal(pc):
            (0x02000000 <= pc <= 0x0203FFFF) or \
            (0x03000000 <= pc <= 0x03007FFF) or \
            (0x08000000 <= pc <= 0x0DFFFFFF)
+
+# ── 监视：uimenu.c 的菜单覆盖表 (IWRAM, 16 槽 x 8 字节) ──
+# 结构: short cmdid; short kind; void* func;
+# kind: 0=NONE 1=ISAVAILABLE(用 MenuAlwaysNotShown 隐藏) 2=ONSELECT
+SM_OVERRIDES   = 0x03001870
+SM_OVR_ENTRIES = 16
+SM_OVR_BYTES   = SM_OVR_ENTRIES * 8
+
+
+def parse_overrides(raw):
+    out = []
+    for i in range(SM_OVR_ENTRIES):
+        b = raw[i*8:(i+1)*8]
+        if len(b) < 8:
+            break
+        cmdid, kind, func = struct.unpack("<HHI", b)
+        if kind == 0 and cmdid == 0 and func == 0:
+            break
+        out.append((cmdid, kind, func))
+    return out
+
 
 class GdbRemote:
     def __init__(self, host, port):
@@ -133,6 +154,7 @@ def main():
 
     bad = None
     miss = 0
+    _last_ovr_sig = [None]
     for i in range(MAXITER):
         time.sleep(POLL)
         # 中断（带重试：崩溃弹窗可能短暂阻塞 stub）
@@ -165,6 +187,20 @@ def main():
                 pass
             continue
         miss = 0
+
+        # 覆盖表是否变化（变化才记录）
+        try:
+            ovr_raw = bytes.fromhex(g.cmd("m%x,%x" % (SM_OVERRIDES, SM_OVR_BYTES), timeout=5))
+            ovr = parse_overrides(ovr_raw)
+            sig = tuple((c, k) for (c, k, _f) in ovr)
+            if sig != _last_ovr_sig[0]:
+                _last_ovr_sig[0] = sig
+                log("[%d] 覆盖表变化: %d 条 -> %s" % (
+                    i, len(ovr),
+                    ", ".join("cmd=0x%02X kind=%d" % (c, k) for (c, k, _f) in ovr) or "(空)"))
+        except Exception as e:
+            log("[%d] 读覆盖表失败: %s" % (i, e))
+
         pc, lr, sp = regs["pc"], regs["lr"], regs["sp"]
         if not legal(pc):
             log("[%d] !!! 非法 PC = 0x%08X (LR=0x%08X SP=0x%08X) !!!" % (i, pc, lr, sp))

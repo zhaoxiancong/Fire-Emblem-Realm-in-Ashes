@@ -11,14 +11,13 @@
       "sortOrder": 1,
       "baseLevel": 1,
       "base": {
-        "hp": 18,
-        "pow": 5,
-        "skl": 6,
-        "spd": 7,
+        "hp": 2,
+        "pow": 1,
+        "skl": 1,
+        "spd": 1,
         "lck": 4,
-        "def": 4,
-        "res": 1,
-        "con": 7
+        "def": 1,
+        "res": 1
       },
       "baseRanks": {
         "ITYPE_SWORD": "WPN_EXP_E"
