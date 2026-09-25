@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 470" font-family="'Segoe UI','Microsoft YaHei',sans-serif">
+  <title>《山河烬》九州舆图与九鼎现状</title>
+  <desc>九宫格式呈现九州地理格局、各州鼎的现状（完好/已毁/失守）与对应章节区间，标出主角北上与南下再归的行程脉络。</desc>
+
+  <rect width="680" height="470" fill="#F7F8FA" rx="8"/>
+  <text x="24" y="32" font-size="17" font-weight="700" fill="#1A1D24">九州舆图与九鼎现状</text>
+  <text x="24" y="52" font-size="11.5" fill="#6B7280">九鼎分镇九州，各州地理气质决定其章节的视觉基调 —— 这是地图设计与瓦片集复用的直接依据</text>
+
+  <!-- 图例 -->
+  <g font-size="10.5" fill="#374151">
+    <rect x="470" y="18" width="13" height="13" fill="#10B981" rx="2"/>
+    <text x="489" y="29">鼎完好</text>
+    <rect x="546" y="18" width="13" height="13" fill="#EF4444" rx="2"/>
+    <text x="565" y="29">已毁</text>
+    <rect x="606" y="18" width="13" height="13" fill="#F59E0B" rx="2"/>
+    <text x="625" y="29">失守</text>
+  </g>
+
+  <!-- 九宫格：3x3，格 186x116，起点 (40,70) -->
+  <!-- 行1 -->
+  <!-- 雍 已毁 -->
+  <rect x="40" y="70" width="190" height="112" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.6" rx="6"/>
+  <text x="54" y="92" font-size="15" font-weight="700" fill="#991B1B">雍州</text>
+  <text x="54" y="111" font-size="10.5" fill="#7F1D1D">边墙·草原·黑水城·鼎湖</text>
+  <text x="54" y="130" font-size="10.5" fill="#7F1D1D">鼎：<tspan font-weight="700">黑水鼎 — 十年前已毁</tspan></text>
+  <text x="54" y="149" font-size="10.5" fill="#7F1D1D">灰潮之源 · 北戎南迁</text>
+  <rect x="54" y="158" width="66" height="17" fill="#EF4444" rx="3"/>
+  <text x="87" y="170" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">8~11 章</text>
+
+  <!-- 冀 完好 -->
+  <rect x="238" y="70" width="190" height="112" fill="#ECFDF5" stroke="#10B981" stroke-width="1.6" rx="6"/>
+  <text x="252" y="92" font-size="15" font-weight="700" fill="#065F46">冀州</text>
+  <text x="252" y="111" font-size="10.5" fill="#047857">帝都天枢城 · 宫城三重</text>
+  <text x="252" y="130" font-size="10.5" fill="#047857">鼎：天枢鼎 — 完好（后被夺）</text>
+  <text x="252" y="149" font-size="10.5" fill="#047857">朝廷 · 国师 · 玄甲军</text>
+  <rect x="252" y="158" width="66" height="17" fill="#10B981" rx="3"/>
+  <text x="285" y="170" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">5~7, 18 章</text>
+
+  <!-- 兖青 散佚 -->
+  <rect x="436" y="70" width="204" height="112" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.6" rx="6"/>
+  <text x="450" y="92" font-size="15" font-weight="700" fill="#4B5563">兖州 · 青州</text>
+  <text x="450" y="111" font-size="10.5" fill="#6B7280">齐鲁旧地</text>
+  <text x="450" y="130" font-size="10.5" fill="#6B7280">鼎：散佚（仅背景提及）</text>
+  <text x="450" y="149" font-size="10.5" fill="#6B7280">义军活动区 · 留给续作</text>
+  <rect x="450" y="158" width="80" height="17" fill="#9CA3AF" rx="3"/>
+  <text x="490" y="170" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">不设正章</text>
+
+  <!-- 行2 -->
+  <!-- 豫 完好 -->
+  <rect x="40" y="190" width="190" height="112" fill="#ECFDF5" stroke="#10B981" stroke-width="1.6" rx="6"/>
+  <text x="54" y="212" font-size="15" font-weight="700" fill="#065F46">豫州</text>
+  <text x="54" y="231" font-size="10.5" fill="#047857">云溪镇·青要山·孟津渡·洛邑</text>
+  <text x="54" y="250" font-size="10.5" fill="#047857">鼎：云溪鼎 — 完好（虞家守）</text>
+  <text x="54" y="269" font-size="10.5" fill="#047857">司鼎监本部 · 豫州镇将</text>
+  <rect x="54" y="278" width="66" height="17" fill="#10B981" rx="3"/>
+  <text x="87" y="290" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">序~4, 17 章</text>
+
+  <!-- 梁 完好 -->
+  <rect x="238" y="190" width="190" height="112" fill="#ECFDF5" stroke="#10B981" stroke-width="1.6" rx="6"/>
+  <text x="252" y="212" font-size="15" font-weight="700" fill="#065F46">梁州</text>
+  <text x="252" y="231" font-size="10.5" fill="#047857">水乡·漕运·豪强林立</text>
+  <text x="252" y="250" font-size="10.5" fill="#047857">鼎：水乡鼎 — 完好</text>
+  <text x="252" y="269" font-size="10.5" fill="#047857">梁王萧铁衣（首鼠两端）</text>
+  <rect x="252" y="278" width="66" height="17" fill="#10B981" rx="3"/>
+  <text x="285" y="290" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">13 章</text>
+
+  <!-- 徐 失守 -->
+  <rect x="436" y="190" width="204" height="112" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6" rx="6"/>
+  <text x="450" y="212" font-size="15" font-weight="700" fill="#78350F">徐州</text>
+  <text x="450" y="231" font-size="10.5" fill="#92400E">山野水乡 · 鸣野</text>
+  <text x="450" y="250" font-size="10.5" fill="#92400E">鼎：鸣野鼎 — <tspan font-weight="700">失守</tspan></text>
+  <text x="450" y="269" font-size="10.5" fill="#92400E">沈家灭门地 · 白泽遗种</text>
+  <rect x="450" y="278" width="66" height="17" fill="#F59E0B" rx="3"/>
+  <text x="483" y="290" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">14 章</text>
+
+  <!-- 行3 -->
+  <!-- 荆 失守 -->
+  <rect x="40" y="310" width="190" height="112" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.6" rx="6"/>
+  <text x="54" y="332" font-size="15" font-weight="700" fill="#78350F">荆州</text>
+  <text x="54" y="351" font-size="10.5" fill="#92400E">云梦大泽 · 白鹤观</text>
+  <text x="54" y="370" font-size="10.5" fill="#92400E">鼎：云梦鼎 — <tspan font-weight="700">失守</tspan></text>
+  <text x="54" y="389" font-size="10.5" fill="#92400E">白鹤观 · 姬瑶</text>
+  <rect x="54" y="398" width="66" height="17" fill="#F59E0B" rx="3"/>
+  <text x="87" y="410" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">15 章</text>
+
+  <!-- 扬 完好 -->
+  <rect x="238" y="310" width="190" height="112" fill="#ECFDF5" stroke="#10B981" stroke-width="1.6" rx="6"/>
+  <text x="252" y="332" font-size="15" font-weight="700" fill="#065F46">扬州</text>
+  <text x="252" y="351" font-size="10.5" fill="#047857">淮泗水网 · 富庶商埠</text>
+  <text x="252" y="370" font-size="10.5" fill="#047857">鼎：淮泗鼎 — 完好</text>
+  <text x="252" y="389" font-size="10.5" fill="#047857">饕餮之灾 · 梁王殉国</text>
+  <rect x="252" y="398" width="66" height="17" fill="#10B981" rx="3"/>
+  <text x="285" y="410" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">16 章</text>
+
+  <!-- 归墟 特殊 -->
+  <rect x="436" y="310" width="204" height="112" fill="#1F2937" rx="6"/>
+  <text x="450" y="332" font-size="15" font-weight="700" fill="#FBBF24">归墟</text>
+  <text x="450" y="351" font-size="10.5" fill="#D1D5DB">不在九州之内 —— 地脉总眼</text>
+  <text x="450" y="370" font-size="10.5" fill="#D1D5DB">鼎：九州总鼎（初鼎，传说）</text>
+  <text x="450" y="389" font-size="10.5" fill="#D1D5DB">四凶封印处 · 九鼎之源</text>
+  <rect x="450" y="398" width="80" height="17" fill="#F59E0B" rx="3"/>
+  <text x="490" y="410" font-size="10" fill="#FFFFFF" text-anchor="middle" font-weight="600">19~20 章</text>
+
+  <!-- 底部行程说明 -->
+  <rect x="40" y="434" width="600" height="24" fill="#EEF2F6" rx="4"/>
+  <text x="52" y="450" font-size="10.5" fill="#374151">行程脉络：豫州（故乡失火）→ 冀州帝都（迷局亡命）→ 北上雍州（北地真相）→ 南下梁扬徐荆（会盟天下）→ 回豫州重铸 → 归墟决战</text>
+</svg>

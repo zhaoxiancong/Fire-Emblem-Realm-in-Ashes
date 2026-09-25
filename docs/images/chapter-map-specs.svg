@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 560" font-family="'Segoe UI','Microsoft YaHei',sans-serif">
+  <title>二十一章地图规格一览（尺寸 / 格子数 / 瓦片集 / 地图变更）</title>
+  <desc>逐章列出序章到第 20 章及两个外传的地图尺寸、格子数（对照 1023 上限）、主题与复用的原版瓦片集，并标出需要手写事件数据的地图变更章节。</desc>
+
+  <rect width="680" height="560" fill="#F7F8FA" rx="8"/>
+  <text x="24" y="30" font-size="16.5" font-weight="700" fill="#1A1D24">二十一章地图规格一览</text>
+  <text x="24" y="49" font-size="11" fill="#6B7280">红线：宽 × 高 ≤ 1023 格（地图缓冲 2048 字节）｜⚠ 标记 = 需要手写事件数据的地图变更</text>
+
+  <!-- 表头 -->
+  <rect x="20" y="60" width="640" height="24" fill="#374151" rx="3"/>
+  <g font-size="10.5" fill="#FFFFFF" font-weight="600">
+    <text x="30" y="76">章</text>
+    <text x="76" y="76">尺寸</text>
+    <text x="140" y="76">格子数</text>
+    <text x="230" y="76">主题</text>
+    <text x="440" y="76">复用瓦片集</text>
+    <text x="596" y="76">变更</text>
+  </g>
+
+  <!-- 行数据：y 从 84 开始，每行 21.5 -->
+  <g font-size="10.5" fill="#1F2937">
+    <!-- 序 -->
+    <rect x="20" y="84" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="99" font-weight="600">序</text>
+    <text x="76" y="99">12×8</text>
+    <text x="140" y="99">96</text>
+    <text x="230" y="99">雪夜云溪镇</text>
+    <text x="440" y="99">ObjectType1 城镇</text>
+    <text x="596" y="99" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="105" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="120" font-weight="600">1</text>
+    <text x="76" y="120">16×12</text>
+    <text x="140" y="120">192</text>
+    <text x="230" y="120">青要山道（纵向推进）</text>
+    <text x="440" y="120">ObjectType9 山野</text>
+    <text x="596" y="120" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="126" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="141" font-weight="600">2</text>
+    <text x="76" y="141">14×14</text>
+    <text x="140" y="141">196</text>
+    <text x="230" y="141">山民寨（双寨门防守）</text>
+    <text x="440" y="141">ObjectType8 村落</text>
+    <text x="596" y="141" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="147" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="162" font-weight="600">3</text>
+    <text x="76" y="162">18×12</text>
+    <text x="140" y="162">216</text>
+    <text x="230" y="162">孟津渡（占旗）</text>
+    <text x="440" y="162">ObjectType7 水岸</text>
+    <text x="596" y="162" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="168" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="183" font-weight="600">4</text>
+    <text x="76" y="183">20×14</text>
+    <text x="140" y="183">280</text>
+    <text x="230" y="183">洛邑城区夜战</text>
+    <text x="440" y="183">ObjectType1 城镇</text>
+    <text x="596" y="183" fill="#9CA3AF">—</text>
+
+    <!-- 第二幕 -->
+    <rect x="20" y="189" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="204" font-weight="600">5</text>
+    <text x="76" y="204">18×13</text>
+    <text x="140" y="204">234</text>
+    <text x="230" y="204">天枢外郭坊市（守坊门）</text>
+    <text x="440" y="204">ObjectType1 + 夜调色板</text>
+    <text x="596" y="204" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="210" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="225" font-weight="600">6</text>
+    <text x="76" y="225">20×12</text>
+    <text x="140" y="225">240</text>
+    <text x="230" y="225">宫城火夜（撤离）</text>
+    <text x="440" y="225">ObjectType2 城塞</text>
+    <text x="596" y="225" fill="#EF4444" font-weight="700">⚠ 火势蔓延</text>
+
+    <rect x="20" y="231" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="246" font-weight="600">7</text>
+    <text x="76" y="246">16×14</text>
+    <text x="140" y="246">224</text>
+    <text x="230" y="246">驿亭郊野（正面会战）</text>
+    <text x="440" y="246">ObjectType3 郊野</text>
+    <text x="596" y="246" fill="#9CA3AF">—</text>
+
+    <!-- 第三幕 -->
+    <rect x="20" y="252" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="267" font-weight="600">8</text>
+    <text x="76" y="267">17×13</text>
+    <text x="140" y="267">221</text>
+    <text x="230" y="267">边墙烽燧（纵守）</text>
+    <text x="440" y="267">ObjectType4 边塞</text>
+    <text x="596" y="267" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="273" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="288" font-weight="600">9</text>
+    <text x="76" y="288">18×14</text>
+    <text x="140" y="288">252</text>
+    <text x="230" y="288">灰潮草原</text>
+    <text x="440" y="288">ObjectType5 + 灰调色板</text>
+    <text x="596" y="288" fill="#F59E0B" font-weight="700">地形伤害</text>
+
+    <rect x="20" y="294" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="309" font-weight="600">10</text>
+    <text x="76" y="309">22×12</text>
+    <text x="140" y="309">264</text>
+    <text x="230" y="309">黑水城攻城</text>
+    <text x="440" y="309">ObjectType2 城塞</text>
+    <text x="596" y="309" fill="#EF4444" font-weight="700">⚠ 破门</text>
+
+    <rect x="20" y="315" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="330" font-weight="600">11</text>
+    <text x="76" y="330">20×14</text>
+    <text x="140" y="330">280</text>
+    <text x="230" y="330">干涸鼎湖（竞技场）</text>
+    <text x="440" y="330">ObjectType6 岩地</text>
+    <text x="596" y="330" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="336" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="351" font-weight="600">12</text>
+    <text x="76" y="351">19×13</text>
+    <text x="140" y="351">247</text>
+    <text x="230" y="351">河洛渡口（水域分割）</text>
+    <text x="440" y="351">ObjectType7 水岸</text>
+    <text x="596" y="351" fill="#9CA3AF">—</text>
+
+    <!-- 第四幕 -->
+    <rect x="20" y="357" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="372" font-weight="600">13</text>
+    <text x="76" y="372">21×12</text>
+    <text x="140" y="372">252</text>
+    <text x="230" y="372">梁州水网（水陆双线）</text>
+    <text x="440" y="372">ObjectType8 + 7 混合</text>
+    <text x="596" y="372" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="378" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="393" font-weight="600">14</text>
+    <text x="76" y="393">17×14</text>
+    <text x="140" y="393">238</text>
+    <text x="230" y="393">徐州鸣野（蜿蜒长线）</text>
+    <text x="440" y="393">ObjectType9 + 10</text>
+    <text x="596" y="393" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="399" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="414" font-weight="600">15</text>
+    <text x="76" y="414">19×14</text>
+    <text x="140" y="414">266</text>
+    <text x="230" y="414">云梦泽白鹤观（多层护城）</text>
+    <text x="440" y="414">ObjectType7 + 9 混合</text>
+    <text x="596" y="414" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="420" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="435" font-weight="600">16</text>
+    <text x="76" y="435">24×12</text>
+    <text x="140" y="435">288</text>
+    <text x="230" y="435">淮泗城郊（动态地图）</text>
+    <text x="440" y="435">ObjectType8 + 暗红调</text>
+    <text x="596" y="435" fill="#EF4444" font-weight="700">⚠ 饕餮吞噬</text>
+
+    <!-- 第五幕 -->
+    <rect x="20" y="441" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="456" font-weight="600">17</text>
+    <text x="76" y="456">18×14</text>
+    <text x="140" y="456">252</text>
+    <text x="230" y="456">龙脉之眼（同心圆防御）</text>
+    <text x="440" y="456">ObjectType6 + 火光调</text>
+    <text x="596" y="456" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="462" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="477" font-weight="600">18</text>
+    <text x="76" y="477">23×12</text>
+    <text x="140" y="477">276</text>
+    <text x="230" y="477">天枢城三层城防</text>
+    <text x="440" y="477">ObjectType1 + 2 + 金红调</text>
+    <text x="596" y="477" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="483" width="640" height="21" fill="#FFFFFF"/>
+    <text x="30" y="498" font-weight="600">19</text>
+    <text x="76" y="498">20×14</text>
+    <text x="140" y="498">280</text>
+    <text x="230" y="498">归墟地脉（异空间）</text>
+    <text x="440" y="498">ObjectType6 + 深紫调</text>
+    <text x="596" y="498" fill="#9CA3AF">—</text>
+
+    <rect x="20" y="504" width="640" height="21" fill="#F0FDF4"/>
+    <text x="30" y="519" font-weight="600">20</text>
+    <text x="76" y="519">22×13</text>
+    <text x="140" y="519">286</text>
+    <text x="230" y="519">归墟之心（九鼎之环）</text>
+    <text x="440" y="519">ObjectType6 + 紫金双调</text>
+    <text x="596" y="519" fill="#9CA3AF">—</text>
+  </g>
+
+  <!-- 底部统计 -->
+  <rect x="20" y="530" width="640" height="22" fill="#EEF2F6" rx="4"/>
+  <text x="32" y="545" font-size="10.5" fill="#374151">21 张地图全部 ≤ 288 格（红线 1023 的 28%）；Demo 五章平均 196 格；仅 3 章需地图变更（⚠），须预留额外工时</text>
+</svg>
