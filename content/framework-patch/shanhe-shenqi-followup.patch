@@ -1,0 +1,85 @@
+# 山河烬 框架补丁: shanhe-shenqi-followup
+#
+# 目标文件: src/bmbattle.c   (框架只读依赖 -> unified diff 最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么(2 处 / 19 行):
+#   ① 顶部 include 区加 `#include "constants/items_expansion.h"` ——
+#      src/bmbattle.c 原本只 include 了 constants/items.h，而 ITEM_SHANHE_POJUN
+#      定义在 constants/items_expansion.h，不加这行会**未定义符号**。
+#   ② BattleGenerateHitAttributes() 的伤害钳制之后、BattleCheckPetrify() 之前，
+#      加一段「破军对骑乘的追击伤害 +3」修正。
+#
+# 为什么必须在这里（第二个 seam —— 机制钩子做不到）:
+#   框架的机制钩子（ExpansionMechanicsApplyBattleStats）**一次只给"本次战斗的
+#   一组数值"**，它看不到"这一击是不是追击"，也拿不到每击的 gBattleStats.damage。
+#   「追击伤害 +N」是**逐次命中**的修正 ⇒ 必须落在命中序列的伤害计算里。
+#
+# 为什么在这里判定"追击"是可靠的（不是猜的）:
+#   src/bmbattle.c:783（BattleUnwind）在发起追击轮前写下
+#       gBattleHitIterator->attributes = BATTLE_HIT_ATTR_FOLLOWUP;
+#   随后 BattleGenerateRoundHits() 把该 attributes 存进局部 attrs，并在每一次
+#   命中前 `gBattleHitIterator->attributes |= attrs` 重新写回 ⇒
+#   到 BattleGenerateHitAttributes() 时该位一定在位。
+#   ⚠️ BATTLE_HIT_ATTR_FOLLOWUP（include/bmbattle.h:129，bit 2）在整个框架里
+#      **只有那一处写入、无任何消费点** —— 它是为本类扩展预留的纯标记。
+#
+# 为什么插入点在"钳制之后":
+#   本函数先把 damage 从 attack-defense 算出，再走必杀 ×3、上限钳制、下限归零。
+#   若在钳制前加值，负数（打不动）会被后续 `if (damage < 0) damage = 0` 吞掉，
+#   而设计意图是"追击至少多打 3 点"。故放在全部钳制之后，并自己补一次上限钳制。
+#
+# 四个守卫：
+#   ① BATTLE_HIT_ATTR_FOLLOWUP  —— 只在追击轮（不是反击、不是首击）
+#   ② !BATTLE_HIT_ATTR_MISS      —— miss 不加（此时 damage 仍是 0）
+#   ③ attacker->weapon == ITEM_SHANHE_POJUN —— 只在握破军时
+#   ④ defender 带 CA_MOUNTED     —— 只对骑乘
+#
+# 与机制钩子的分工（M3② 全貌）:
+#   · 对甲士系必杀 +20 / 无视其 50% 防御 → 机制钩子（content/src/shanhe_shenqi.c）
+#   · 对骑乘追击伤害 +3                → 本补丁
+#   两者合起来构成 docs/3 §3.2 破军的全部三效果。
+#
+# ⚠️ 同文件已有两个补丁（shenqi-no-weapon-triangle / weapontriangle-magic-ring），
+#    本补丁与它们上下文相隔甚远（本处约 1082 行；另两个在 ~56-70 与 ~1950 行），
+#    互不重叠。共存前提：shanhe-build.sh 3c'' 的两阶段应用（先统一还原去重目标，
+#    再按序 apply）。
+#
+# 上游若自行引入等价的"逐击伤害修正"钩子，本补丁应改为用那个钩子。
+# 详见 docs/5 §5.10 与 docs/3 §3.2。
+#
+--- a/src/bmbattle.c
++++ b/src/bmbattle.c
+@@ -24,6 +24,7 @@
+ 
+ #include "constants/songs.h"
+ #include "constants/items.h"
++#include "constants/items_expansion.h" /* Shanhe: ITEM_SHANHE_POJUN */
+ #include "constants/classes.h"
+ #include "constants/characters.h"
+ #include "constants/terrains.h"
+@@ -1082,6 +1083,24 @@ void BattleGenerateHitAttributes(struct BattleUnit* attacker, struct BattleUnit*
+     if (gBattleStats.damage < 0)
+         gBattleStats.damage = 0;
+ 
++    /* Shanhe: "Pojun" grants +3 damage on a follow-up hit against a mounted
++     * foe (docs/3 section 3.2). This is the second seam: the base-stat hook
++     * cannot see per-hit follow-up state, but BATTLE_HIT_ATTR_FOLLOWUP is set
++     * by BattleUnwind() (and re-asserted per hit by BattleGenerateRoundHits)
++     * before this runs, so it is reliable here. Skipped on a miss (damage is
++     * still 0 and the MISS attribute is set), and re-clamped to the damage
++     * ceiling like every other path in this function. */
++    if ((gBattleHitIterator->attributes & BATTLE_HIT_ATTR_FOLLOWUP)
++        && !(gBattleHitIterator->attributes & BATTLE_HIT_ATTR_MISS)
++        && attacker->weapon == ITEM_SHANHE_POJUN
++        && (UNIT_CATTRIBUTES(&defender->unit) & CA_MOUNTED))
++    {
++        gBattleStats.damage += 3;
++
++        if (gBattleStats.damage > BATTLE_MAX_DAMAGE)
++            gBattleStats.damage = BATTLE_MAX_DAMAGE;
++    }
++
+     BattleCheckPetrify(attacker, defender);
+ 
+     if (gBattleStats.damage != 0)

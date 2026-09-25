@@ -849,6 +849,17 @@ if [ -n "$FRAMEWORK_PATCHES" ]; then
     act "[预演] 框架补丁 $n_patches 个 → 目标文件 $n_targets 个"
     printf '%s\n' "$PATCH_TARGETS" | sed '/^$/d;s|^|      → |'
   else
+    # 阶段 0：清障 —— 删掉 patch(1) 可能留下的 .rej / .orig 残留物。
+    # 为什么必须做（2026-09-25 实测）：任何一次手工 `patch` 尝试（或带 fuzz 的
+    # 成功应用）都会在框架侧留下 *.rej / *.orig，它们是**未被 .gitignore 覆盖的
+    # 未追踪文件** ⇒ 第 6 步反查必然报「预期外改动」，训练出"忽略告警"的习惯。
+    # 本步骤让"每次构建的起点"确定，反查才继续可信。
+    # ⚠️ 只清 git 已追踪目录下的残留（限定到补丁目标所在目录），不碰 build/。
+    while IFS= read -r junk; do
+      [ -n "$junk" ] || continue
+      rm -f "$junk" && dim "清障：已删除残留 ${junk#$FRAMEWORK_DIR/}"
+    done < <(cd "$FRAMEWORK_DIR" && find include src tools -type f \( -name '*.rej' -o -name '*.orig' \) 2>/dev/null | sed "s|^|$FRAMEWORK_DIR/|")
+
     # 阶段 1：每个目标文件只还原一次
     while IFS= read -r t; do
       [ -n "$t" ] || continue
@@ -1088,6 +1099,14 @@ else
           if [ -s "$PATCH_TARGETS_FILE" ] && grep -qxF "$path" "$PATCH_TARGETS_FILE"; then
             :
           else
+            # .rej/.orig 单独指名 —— 它们是 patch(1) 的失败/备份残留，
+            # 含义与"手滑改了框架"不同（虽同为预期外），要给出可执行的处置指示。
+            case "$path" in
+              *.rej|*.orig)
+                printf "  %s⚠ patch 残留物：%s%s（补丁曾失败或带 fuzz；3c'' 阶段 0 的清障会在下次构建自动删除）\n" \
+                  "$c_yellow" "$path" "$c_off"
+                ;;
+            esac
             printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
             UNEXPECTED=$((UNEXPECTED+1))
           fi

@@ -1,0 +1,62 @@
+# 山河烬 框架补丁: shanhe-shenqi-install
+#
+# 目标文件: src/expansion_mechanics.c   (框架只读依赖 -> unified diff 最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么(13 行): 在框架唯一的机制安装点 ExpansionMechanicsInstallBuiltins() 里，
+#   追加一行调用 `ShanheShenqiInstallMechanics();`（本项目的机制安装入口），
+#   并在其上方就近加一条 extern 声明。
+#
+# 为什么需要这条补丁（数据层/机制层都表达不了）:
+#   框架的机制钩子注册表是**公开 API**（ExpansionMechanicsRegister），但**谁调用
+#   注册**是有唯一安装点的：src/expansion_mechanics.c 的
+#   ExpansionMechanicsInstallBuiltins()，由 ExpansionMechanicsApplyBattleStats()
+#   首次调用时惰性触发（src/expansion_mechanics.c:217）。该函数目前只安装两条
+#   框架自带机制（sample / starter_content），**没有第二条路由**。
+#   本项目的原创机制定义在 src/shanhe_shenqi.c（由 tools/shanhe-build.sh 的 3c 步
+#   从 content/src/ 铺入），它需要一个调用点 —— 这就是那条调用点。
+#
+# 为什么这是最小侵入的写法:
+#   ① 声明写在 .c 里而非公共头文件 ⇒ **不扩大框架的公开 API 面**；
+#   ② 只加 1 条调用 + 1 条声明，不改任何既有逻辑；
+#   ③ 被调用的函数在**每个配置下都有定义**（src/shanhe_shenqi.c 在
+#      FE8_EXPANSION_MECHANICS_HOOKS=0 时提供空实现）⇒ 现代车道与 legacy 车道
+#      都能链接成功（legacy 会编译并链接 src/ 下全部 .c）。
+#
+# 与机制钩子的关系:
+#   本补丁**只**负责"把我们的安装函数接上框架的安装点"；真正的机制逻辑在
+#   content/src/shanhe_shenqi.c（破军：对甲士系必杀 +20、无视其 50% 防御）。
+#   设计依据与 seam 能力边界见 docs/5 §5.8 / §5.10。
+#
+# ⚠️ 若上游把 InstallBuiltins 改成"遍历注册者"的形态，本补丁应改为用那个机制，
+#    不要保留这条硬接线。详见 docs/5 §5.10。
+#
+--- a/src/expansion_mechanics.c
++++ b/src/expansion_mechanics.c
+@@ -181,6 +181,14 @@ static void ExpansionMechanicsSampleFullHpGuard(
+ }
+ #endif /* FE8_EXPANSION_MECHANICS_SAMPLE */
+ 
++/* Shanhe: project install hook, defined in src/shanhe_shenqi.c.
++ * Declared here (not in a header) so this stays a project-local addition
++ * that never widens the framework's public API surface. The definition
++ * exists in EVERY build (a no-op when MECHANICS_HOOKS=0), so the call in
++ * ExpansionMechanicsInstallBuiltins() links on both the modern and the
++ * legacy lane. */
++void ShanheShenqiInstallMechanics(void);
++
+ void ExpansionMechanicsInstallBuiltins(void)
+ {
+     if (sBuiltinsInstalled)
+@@ -200,6 +208,11 @@ void ExpansionMechanicsInstallBuiltins(void)
+      * exactly ONE built-in install point and no second router. A no-op when
+      * FE8_EXPANSION_STARTER_CONTENT is 0. */
+     ExpansionStarterContentInstallMechanics();
++
++    /* Shanhe: the project's own mechanics hang off the SAME single install
++     * point, through the same public ExpansionMechanicsRegister() API --
++     * still exactly one router, never a second one. */
++    ShanheShenqiInstallMechanics();
+ }
+ 
+ void ExpansionMechanicsApplyBattleStats(
