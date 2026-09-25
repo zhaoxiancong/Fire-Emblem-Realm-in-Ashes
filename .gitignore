@@ -18,6 +18,8 @@ dist/
 *.bps
 *.ups
 *.patch
+# 例外：框架补丁必须入库（换机重建要能自动重放；见 docs/6 §3.4g）
+!content/framework-patch/*.patch
 
 # 同步脚本的中间日志（正式记录落 ~/shanhe-logs/，不入库）
 /shanhe-logs/

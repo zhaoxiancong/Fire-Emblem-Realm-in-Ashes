@@ -1,0 +1,101 @@
+# 山河烬 框架补丁: uimenu-empty-menu-guard
+#
+# 目标文件: src/uimenu.c  (框架只读依赖 -> 以 unified diff 形式最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+# 版本    : v2 (2026-09-25)  —— v1 只护住 Menu_OnInit, 实机随即在同族的
+#           ProcessMenuSelectInput 崩第二次 (LR=0x080BF0F7), 故改为根治.
+#
+# 修什么:
+#   教学关卡里 uimenu.c 有一族"不检查就解引用 menuItems[]"的缺陷. 当
+#   Menu_Setup 的填充循环一个项都没加 (所有条目 MENU_NOTSHOWN) 或只加了部分时,
+#   menuItems[] 里留着上一个 Proc 的残留数据, 被当成 MenuItemProc* 解引用,
+#   最终 bx 跳到非法地址. 实机两次复现:
+#     v1 前: PC=0x708E02B4 LR=0x080BE6D7  (Menu_OnInit)
+#     v1 后: PC=0xF846C0E6 LR=0x080BF0F7  (ProcessMenuSelectInput)
+#   同族站点共 8 处: Menu_OnInit / ProcessMenuSelectInput / Menu_AutoHelpBox_OnInit /
+#   Menu_AutoHelpBox_OnLoop / ProcessMenuDpadInput / GetMenuCursorPosition /
+#   RedrawMenu / ApplyMenuCursorVScroll.
+#
+# 怎么修 (根治, 而非逐点加保护):
+#   1) 定义"安全占位菜单项": def 指向全 NULL 回调的定义;
+#   2) Menu_Setup 填充前把 menuItems[] 全部预置为该占位项
+#      -> 所有解引用退化为 no-op, 8 处缺陷一次性挡住;
+#   3) 填充循环加 itemCount < MENU_ITEM_MAX 边界保护 (15 项 vs 11 格);
+#   4) Menu_OnInit 补 itemCount==0 早退 + itemCurrent 夹取.
+#
+# 为什么从数据层修不了:
+#   itemCount==0 是 Menu_Setup 的合法输出; 缺陷在于消费者未做有效性检查.
+#
+# 这是本项目的【已知偏离】(docs/6 §3.4g): 破了"框架只读"铁律.
+# 上游一旦改动该文件上下文, 本补丁会 apply 失败 -> 必须人工 rebase.
+#
+--- a/src/uimenu.c
++++ b/src/uimenu.c
+@@ -47,8 +47,18 @@
+ {
+     PROC_BLOCK
+ };
+ 
++/* == shanhe PATCH: uimenu-empty-menu-guard (1/4) ==
++ * 安全占位菜单项: 其 def 指向一个所有回调皆为 NULL 的定义.
++ * 用途见 Menu_Setup 里的预填充 —— 让 menuItems[] 永远不会残留上一个 Proc 的垃圾.
++ * 于是 uimenu.c 里所有 "menuItems[itemCurrent]->def->onX(...)" 的解引用
++ * (Menu_OnInit / ProcessMenuSelectInput / Menu_AutoHelpBox_* 等共 8 处)
++ * 在 itemCount==0 或部分填充时都退化为安全 no-op, 而不是野指针 bx 跳飞.
++ */
++static CONST_DATA struct MenuItemDef  sShanhePlaceholderMenuItemDef = {0};
++static CONST_DATA struct MenuItemProc sShanhePlaceholderMenuItem    = { .def = &sShanhePlaceholderMenuItemDef };
++
+ static void Menu_AutoHelpBox_OnInit(struct MenuProc* proc);
+ static void Menu_AutoHelpBox_OnLoop(struct MenuProc* proc);
+ 
+ static CONST_DATA
+@@ -201,16 +211,29 @@
+ 
+     if (rect.h < 0)
+         proc->state |= MENU_STATE_NOTSHOWN;
+ 
++    /* shanhe PATCH: uimenu-empty-menu-guard (2/4)
++     * 预填充安全占位项. 背景: Proc_Start 复用 proc 槽位时不清零, 若下面的循环
++     * 一个项都没加 (所有条目 MENU_NOTSHOWN) 或只加了部分, menuItems[] 里就会留着
++     * 上一个 Proc 的残留数据; 而 uimenu.c 多处不检查就解引用 -> 野指针跳飞
++     * (实机复现: 教学关卡 Jumped to invalid address)。
++     */
++    for (i = 0; i < MENU_ITEM_MAX; ++i)
++        proc->menuItems[i] = (struct MenuItemProc*)&sShanhePlaceholderMenuItem;
++
+     for (i = 0, itemCount = 0; def->menuItems[i].isAvailable; ++i)
+     {
+         int availability = OverriddenMenuAvailability(&def->menuItems[i], i);
+ 
+         if (!availability)
+             availability = def->menuItems[i].isAvailable(&def->menuItems[i], i);
+ 
+-        if (availability != MENU_NOTSHOWN)
++        /* shanhe PATCH: uimenu-empty-menu-guard (3/4) 边界保护
++         * 单位菜单可多达 15 个条目, 而 menuItems[] 只有 MENU_ITEM_MAX=11 格;
++         * 越过会写到紧跟其后的 itemCount/itemCurrent/itemPrevious/state 字段.
++         */
++        if (availability != MENU_NOTSHOWN && itemCount < MENU_ITEM_MAX)
+         {
+             struct MenuItemProc* item = Proc_Start(sProc_MenuItem, proc);
+             proc->menuItems[itemCount++] = item;
+ 
+@@ -300,8 +323,17 @@
+ {
+     if (proc->def->onInit)
+         proc->def->onInit(proc);
+ 
++    /* shanhe PATCH: uimenu-empty-menu-guard (4/4)
++     * itemCount==0 时直接返回 (此时没有"当前项"的概念), 并夹住越界索引.
++     */
++    if (proc->itemCount == 0)
++        return;
++
++    if (proc->itemCurrent >= proc->itemCount)
++        proc->itemCurrent = 0;
++
+     if (proc->menuItems[proc->itemCurrent]->def->onSwitchIn)
+         proc->menuItems[proc->itemCurrent]->def->onSwitchIn(proc, proc->menuItems[proc->itemCurrent]);
+ }
+ 

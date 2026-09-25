@@ -259,6 +259,18 @@ TARGETS_FILE="$(mktemp)"
   if [ -d "$CONTENT_DIR/src" ]; then
     find "$CONTENT_DIR/src" -maxdepth 1 -name '*.c' -printf 'src/shanhe_%f\n' 2>/dev/null
   fi
+  # 3c''：框架补丁的目标文件（会被覆写，必须先快照）
+  if [ -d "$CONTENT_DIR/framework-patch" ]; then
+    find "$CONTENT_DIR/framework-patch" -maxdepth 1 -type f -name '*.patch' 2>/dev/null \
+      | while read -r p; do
+          t="$(grep -m1 '^+++ b/' "$p" | sed 's|^+++ b/||')"
+          [ -n "$t" ] && printf '%s\n' "$t"
+        done
+  fi
+  # 3b''：消息表补丁目标（会被改写，必须先快照）
+  if find "$CONTENT_DIR/texts" -type f -name 'msg_overrides.*.json' 2>/dev/null | grep -q .; then
+    printf 'texts/texts.txt\n'
+  fi
 } | sort -u > "$TARGETS_FILE"
 
 if [ "$DRY_RUN" = "1" ]; then
@@ -620,6 +632,14 @@ if [ -n "$MSG_OVERRIDE_PATCHES" ]; then
     if [ "$DRY_RUN" = "1" ]; then
       act "[预演] 合并 ROM 消息表补丁：$(basename "$patch") → texts/texts.txt"
     else
+      # ⚠️ 幂等：先把 texts.txt 还原为钉住版本（HEAD）再打补丁。
+      #    否则第二次运行时，当前内容已是上一次写入的中文，
+      #    补丁里的 expected_text（英文原文）必然对不上 → 构建失败。
+      #    （2026-09-25 实机踩到：## MSG_030A 期望与实际不符）
+      if ! ( cd "$FRAMEWORK_DIR" && git checkout HEAD -- texts/texts.txt ) 2>/dev/null; then
+        bad "[消息表] 无法还原 texts/texts.txt（文件不在 git 追踪内？）"
+        continue
+      fi
       if python3 - "$patch" "$FRAMEWORK_DIR/texts/texts.txt" "$DRY_RUN" <<'PYMSG' >> "$REPORT" 2>&1
 import json, re, sys
 patch_path, target_path = sys.argv[1], sys.argv[2]
@@ -752,6 +772,43 @@ else
   dim "content/fonts/ 无字库补丁 —— 沿用框架上游字库"
 fi
 
+# ── 3c''. 框架补丁（★ 已知偏离：本通道会覆写框架文件）──
+# 仅用于「框架缺陷、且数据层修不了」的情形。当前仅一个补丁：
+#   uimenu-empty-menu-guard —— 教学关卡 Menu_OnInit 读未初始化 menuItems[] 导致
+#   野指针跳转（实机复现 PC=0x708E02B4）。详见 docs/5 §5.7 / docs/6 §3.4g。
+# 形式：unified diff，基线 = framework.lock 钉住的 commit。
+# 幂等：先 `git checkout HEAD -- <目标>` 还原，再 apply；apply 失败即中止
+#       （宁可不构建，也不要静默漏补 —— 漏补会退回"崩溃但没人知道"）。
+FRAMEWORK_PATCHES="$(find "$CONTENT_DIR/framework-patch" -maxdepth 1 -type f -name '*.patch' 2>/dev/null | sort)"
+if [ -n "$FRAMEWORK_PATCHES" ]; then
+  PATCH_N=0
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    name="$(basename "$p")"
+    target="$(grep -m1 '^+++ b/' "$p" | sed 's|^+++ b/||')"
+    if [ -z "$target" ]; then
+      bad "[补丁] $name 解析不出目标文件（缺 '+++ b/<path>' 行）"; continue
+    fi
+    if [ "$DRY_RUN" = "1" ]; then
+      act "[预演] 框架补丁 $name → $target"
+    else
+      if ! ( cd "$FRAMEWORK_DIR" && git checkout HEAD -- "$target" ) 2>/dev/null; then
+        bad "[补丁] $name 无法还原 $target（文件不存在或不在 git 追踪内）"; continue
+      fi
+      if ( cd "$FRAMEWORK_DIR" && patch -p1 -N --no-backup-if-mismatch -i "$p" ) >> "$REPORT" 2>&1; then
+        ok "[补丁] $name 已应用 → $target"
+        PATCH_N=$((PATCH_N+1))
+      else
+        bad "[补丁] $name 应用失败 —— 上游可能已改动该文件上下文"
+        die "框架补丁无法应用，需人工 rebase（见 docs/6 §3.4g）"
+      fi
+    fi
+  done <<< "$FRAMEWORK_PATCHES"
+  [ "$DRY_RUN" = "1" ] || warn "★ 已应用 $PATCH_N 个框架补丁 —— 本项目【已知偏离】，升级框架时必须重新评估"
+else
+  dim "content/framework-patch/ 无补丁 —— 框架保持只读（正常状态）"
+fi
+
 # ── 3d. assets 提示 ──
 if [ -d "$CONTENT_DIR/assets" ] && [ -n "$(find "$CONTENT_DIR/assets" -type f -not -name '.gitkeep' 2>/dev/null)" ]; then
   warn "content/assets/ 有文件 —— 资产需按其「拥有缝」登记（见 docs/8），"
@@ -873,19 +930,34 @@ if [ "$DRY_RUN" = "1" ]; then
   act "[预演] 将复制产物 → $EXPORT_PATH"
 elif [ ! -f "$FRAMEWORK_ROM" ]; then
   warn "产物不存在，跳过导出"
-elif mkdir -p "$EXPORT_DIR" 2>/dev/null && cp -f "$FRAMEWORK_ROM" "$EXPORT_PATH" 2>/dev/null; then
+elif ! mkdir -p "$EXPORT_DIR" 2>/dev/null; then
+  warn "无法创建导出目录：$EXPORT_DIR（跳过导出）"
+else
+  # ⚠️ 2026-09-25 实机教训：mGBA 开着会独占锁住 .gba，`cp` 静默失败；
+  #    旧逻辑只 warn，于是「完成」照打，而试玩目录留着**上一版 ROM** ——
+  #    后续所有「实机验证」都变成对旧版的验证（白白浪费一轮）。
+  #    ⇒ 重试 + 校验 SHA1 + 失败即中止构建（宁可不"完成"，也不要假验证）。
+  EXPORT_OK=0
+  for attempt in 1 2 3; do
+    rm -f "$EXPORT_PATH" 2>/dev/null
+    if cp -f "$FRAMEWORK_ROM" "$EXPORT_PATH" 2>/dev/null; then EXPORT_OK=1; break; fi
+    [ "$attempt" -lt 3 ] && { dim "第 $attempt 次导出失败（可能被占用），2 秒后重试…"; sleep 2; }
+  done
+
+  if [ "$EXPORT_OK" != "1" ]; then
+    bad "导出失败：$EXPORT_PATH"
+    dim "手动复制：cp \"$FRAMEWORK_ROM\" \"$EXPORT_PATH\""
+    die "试玩目录 ROM 未更新 —— 很可能 mGBA 正开着锁住文件。请关闭 mGBA 后重跑，否则你会拿旧 ROM 做验证。"
+  fi
+
   EXPORT_SHA1="$(sha1sum "$EXPORT_PATH" | cut -c1-8)"
+  if [ "$EXPORT_SHA1" != "$ROM_SHA1" ]; then
+    die "导出 ROM 的 SHA1 与产物不一致（产物 $ROM_SHA1 vs 导出 $EXPORT_SHA1）—— 复制被截断，不要拿它试玩。"
+  fi
   ok "已导出：$EXPORT_PATH"
   dim "Windows 路径：D:\\workbuddy\\shanhe-rom\\$EXPORT_NAME"
-  if [ "$EXPORT_SHA1" = "$ROM_SHA1" ]; then
-    dim "SHA1 校验一致（$EXPORT_SHA1）✓"
-  else
-    warn "SHA1 不一致：源 $ROM_SHA1 vs 导出 $EXPORT_SHA1（复制可能被截断）"
-  fi
+  dim "SHA1 校验一致（$EXPORT_SHA1）✓ —— 试玩目录与本次产物是同一个 ROM"
   dim "双击启动：D:\\workbuddy\\shanhe-rom\\启动山河烬中文版.cmd"
-else
-  warn "导出失败（目录不可写？）：$EXPORT_DIR"
-  dim "可手动复制：cp \"$FRAMEWORK_ROM\" \"$EXPORT_PATH\""
 fi
 
 # ══════════════════════════════════════════
@@ -920,6 +992,7 @@ else
         src/data_characters.c|src/data_classes.c|src/data_items.c|src/data_supports.c) ;;  # ★ 预期（B' 回填目标，见 3a'）
         docs/game_locale_text_edits.md) ;;                        # ★ 预期（文本台账，见 3b'）
         fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
+        src/uimenu.c) ;;                                          # ★★ 预期（框架补丁，见 3c''：已知偏离）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)
           printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
@@ -929,7 +1002,7 @@ else
     done < "$CUR"
 
     if [ "$UNEXPECTED" -eq 0 ]; then
-      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/shanhe_*.c、Makefile、build/）"
+      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/uimenu.c(框架补丁)、src/shanhe_*.c、Makefile、build/）"
     else
       warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
       dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"
