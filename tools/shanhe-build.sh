@@ -409,59 +409,93 @@ else
   dim "content/data/ 为空 —— 无非原创数据可合并（M1 阶段正常）"
 fi
 
-# ── 3a'. 合并后立即用框架自身的 schema 校验（快速失败） ──
+# ── 3a'. 锁定表处理：数据校验 → B' 回填 → round-trip 复核 ──
 #
-# ★ 2026-09-26 审计修正（两次校验，语义不同，都要跑）：
-#   · 第 1 道 validate --no-roundtrip：只验「数据本身」是否合法
-#     （字段类型 / 符号引用 / 容量 / 跨表依赖）。这是**我们铺的内容**
-#     该过的一关，失败 = 真错误，必须修。
-#   · 第 2 道 generate --no-roundtrip 干跑：验「能否产出 C」。框架的
-#     生成器对锁定表（characters/classes/items/supports）会强制
-#     round-trip 比对 src/data_<表>.c，而该手写文件**不在**我们的
-#     content/ 覆盖范围内 → 裸 make 必然 Error 1。这里提前暴露，
-#     避免用户等到编译到一半才发现。
-#   → 详见 docs/6.方案B内容外置规划.md §3.4 与 docs/11.M1骨架验证记录.md §6
-if [ "$DRY_RUN" != "1" ] && [ "$MERGED_COUNT" -gt 0 ]; then
-  if [ -d "$FRAMEWORK_DIR/scripts/generated_data" ]; then
-    act "schema 预校验（在构建前快速失败，避免错误埋到编译深处）…"
-    VD_LOG="$LOG_DIR/validate-$STAMP.log"
-    ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data validate \
-        --table characters --source src/data/characters.json --no-roundtrip ) > "$VD_LOG" 2>&1
-    if [ $? -eq 0 ]; then
-      ok "① 数据本身合法（字段/引用/容量/跨表依赖全过）"
+# 背景（见 docs/6 §3.4a/§3.4b）：框架对若干 generated-data 表**强制 round-trip**
+# ——`generate` 会把「JSON 生成的模型」与「手写 src/data_<表>.c 解析出的模型」
+# 逐字段比对，不一致就拒绝产出 C，导致 make 报 generated_data.mk:685 Error 1。
+#
+# 解法（B'：生成产物回填）：
+#   用 generate --no-roundtrip 先产出 C，再用它**覆盖**手写参考，
+#   使「参考 == 生成」，round-trip 自然逐字段一致。
+#
+# ★ 边界：只对「hand source 是**整文件**」的 4 张全局锁定表回填。
+#   章节/机制表（units/shops/traps/eventlists/terrainstats/movecost/weapontriangle）
+#   的 hand source 是 **partial-file**（只 round-trip 某个前缀或块，其余部分是
+#   别的章节的数据）——整文件回填会**抹掉其它章节**，故不在此处理（留给 M4）。
+B2_TABLES="characters classes items supports"
+B2_TOUCHED=""
+
+if [ "$DRY_RUN" != "1" ] && [ "$MERGED_COUNT" -gt 0 ] && [ -d "$FRAMEWORK_DIR/scripts/generated_data" ]; then
+  act "锁定表处理（数据校验 → B' 回填 → round-trip 复核）…"
+
+  for t in $B2_TABLES; do
+    [ -f "$CONTENT_DIR/data/$t.json" ] || continue      # 只处理 content/ 里确实有的表
+    B2_TOUCHED="$B2_TOUCHED $t"
+    VD_LOG="$LOG_DIR/validate-$STAMP-$t.log"
+    HAND="src/data_$t.c"
+    GEN="build/generated/data/data_$t.c"
+
+    # ① 数据本身是否合法？（不带 round-trip —— 这一关失败 = 真错误）
+    if ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data validate \
+          --table "$t" --no-roundtrip ) > "$VD_LOG" 2>&1; then
+      ok "[$t] ① 数据合法"
     else
-      bad "① 数据本身非法 —— 常见原因："
-      dim "· 记录同时有 character 与 characterId（schema 要求「exactly one」）"
-      dim "· character 用了 characters.h 未定义的符号名（原创角色须复用被顶替者的符号名）"
+      bad "[$t] ① 数据非法 —— 常见原因："
+      dim "· 一条记录同时有 character 与 characterId（schema 要求 exactly one）"
+      dim "· 用了 characters.h 未定义的符号名（原创须复用被顶替者的符号名）"
       dim "· baseRanks 的键不是 ITYPE_* / 值不是 WPN_EXP_* 字符串"
       dim "· attributes 不是字符串数组；affinity 不是 UNIT_AFFIN_*"
-      dim "· defaultClass 不是 CLASS_*（须在 classes 表里存在）"
+      dim "· defaultClass 不是已定义的 CLASS_*（跨表引用会校验）"
       printf "\n"
-      tail -20 "$VD_LOG" | sed 's/^/      /'
+      tail -15 "$VD_LOG" | sed 's/^/      /'
       dim "完整日志：$VD_LOG"
-      die "schema 预校验未通过，未进行构建"
+      die "[$t] 数据校验未通过，未进行构建"
     fi
 
-    # 第 2 道：干跑生成器（与 make 的硬依赖同参数），提前暴露 round-trip 拦截
-    GEN_LOG="$LOG_DIR/generate-dryrun-$STAMP.log"
-    ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data generate \
-        --table characters --source src/data/characters.json \
-        --out-dir /tmp/shanhe-gen-probe ) > "$GEN_LOG" 2>&1
-    if [ $? -eq 0 ]; then
-      ok "② 生成器干跑通过（该表可产出 C，make 不会卡）"
+    # ② B' 回填：generate --no-roundtrip → 覆盖手写参考
+    if ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data generate \
+          --table "$t" --no-roundtrip --out-dir build/generated/data ) >> "$VD_LOG" 2>&1; then
+      if cp -f "$FRAMEWORK_DIR/$GEN" "$FRAMEWORK_DIR/$HAND" 2>/dev/null; then
+        ok "[$t] ② B' 回填完成（$HAND ← $GEN）"
+      else
+        die "[$t] ② 回填失败：无法写入 $HAND"
+      fi
     else
-      bad "② 生成器干跑失败 —— 多半是 round-trip 拦截（不是数据错）"
-      dim "含义：你改了 src/data/characters.json，但框架侧手写参考"
-      dim "      src/data_characters.c 没同步 → 生成器拒绝产出 C"
-      dim "      → 后续 make 会以 generated_data.mk:685 Error 1 中止"
-      printf "\n"
-      tail -6 "$GEN_LOG" | sed 's/^/      /'
-      dim "完整日志：$GEN_LOG"
-      warn "继续构建的话**必然失败**。建议先跑 RESTORE=1 还原框架再决定。"
-      die "生成器干跑未通过，未进行构建（这正是 round-trip 约束在起作用）"
+      bad "[$t] ② 生成产物失败（非 round-trip 原因）"
+      tail -10 "$VD_LOG" | sed 's/^/      /'
+      dim "完整日志：$VD_LOG"
+      die "[$t] 生成失败，未进行构建"
     fi
-    rm -rf /tmp/shanhe-gen-probe
+
+    # ③ round-trip 复核 —— 回填后必须通过，这是「make 不会因它卡住」的证明
+    if ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data validate \
+          --table "$t" ) > "$VD_LOG" 2>&1; then
+      ok "[$t] ③ round-trip 复核通过"
+    else
+      bad "[$t] ③ round-trip 复核失败 —— 回填未生效？"
+      tail -10 "$VD_LOG" | sed 's/^/      /'
+      dim "完整日志：$VD_LOG"
+      die "[$t] round-trip 复核未通过"
+    fi
+  done
+
+  if [ -z "$B2_TOUCHED" ]; then
+    dim "content/data/ 里没有受 round-trip 约束的表 —— 跳过（M1 阶段正常）"
+  else
+    dim "已处理：$B2_TOUCHED"
+    dim "边界：章节表（units/shops/…）的 hand source 是 partial-file，不在此回填（M4 专门设计）"
   fi
+
+  # 提示：content/data/ 里有、但不在 B2 名单的表（可能是章节表，需人工确认）
+  for f in "$CONTENT_DIR/data"/*.json; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f" .json)"
+    case " $B2_TABLES " in
+      *" $base "*) ;;
+      *) warn "content/data/$base.json 不在自动处理名单（可能是章节表/新表）—— 请确认其落点与 round-trip 策略" ;;
+    esac
+  done
 fi
 
 # ── 3b. texts/ 合并 ──
@@ -676,14 +710,17 @@ else
 
     # 与快照对比：快照里没有的 = 预期外
     # git porcelain 格式：XY<空格>path（X/Y 各 1 列，可能是空格）
+    # ⚠️ 必须用 `IFS= read` —— 否则行首的 X 列若是空格会被 read 吃掉，
+    #    导致 ${line:3} 切片整体左移 2 位（实测：src/data/… 被切成 rc/data/…）
     UNEXPECTED=0
-    while read -r line; do
+    while IFS= read -r line; do
       [ -z "$line" ] && continue
       # 从第 4 个字符起取路径（XY + 空格 = 3 字符前缀）
       path="${line:3}"
       case "$path" in
-        src/data/*|texts/*|src/shanhe_*.c|Makefile) ;;   # 预期（脚本铺设目标）
-        build/*|*/build/*) ;;                             # 构建产物，正常
+        src/data/*|texts/*|src/shanhe_*.c|Makefile) ;;            # 预期（脚本铺设目标）
+        src/data_characters.c|src/data_classes.c|src/data_items.c|src/data_supports.c) ;;  # ★ 预期（B' 回填目标，见 3a'）
+        build/*|*/build/*) ;;                                     # 构建产物，正常
         *)
           printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
           UNEXPECTED=$((UNEXPECTED+1))
@@ -692,7 +729,7 @@ else
     done < "$CUR"
 
     if [ "$UNEXPECTED" -eq 0 ]; then
-      ok "反查通过：所有改动都在预期范围内（src/data/、texts/、src/shanhe_*.c、Makefile、build/）"
+      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、src/shanhe_*.c、Makefile、build/）"
     else
       warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
       dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"

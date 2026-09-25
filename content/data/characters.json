@@ -1,0 +1,42 @@
+{
+  "$schema": "fe8.characters.v1",
+  "characters": [
+    {
+      "character": "CHARACTER_EIRIKA",
+      "nameTextId": 530,
+      "descTextId": 622,
+      "defaultClass": "CLASS_EIRIKA_LORD",
+      "portrait": 2,
+      "affinity": "UNIT_AFFIN_LIGHT",
+      "sortOrder": 1,
+      "baseLevel": 1,
+      "base": {
+        "hp": 18,
+        "pow": 5,
+        "skl": 6,
+        "spd": 7,
+        "lck": 4,
+        "def": 4,
+        "res": 1,
+        "con": 7
+      },
+      "baseRanks": {
+        "ITYPE_SWORD": "WPN_EXP_E"
+      },
+      "growth": {
+        "hp": 70,
+        "pow": 45,
+        "skl": 50,
+        "spd": 55,
+        "def": 30,
+        "res": 15,
+        "lck": 40
+      },
+      "attributes": [
+        "CA_FEMALE"
+      ],
+      "supportData": "SupportData_Eirika",
+      "visitGroup": 7
+    }
+  ]
+}
