@@ -30,13 +30,13 @@
       },
       "classRelativePower": 3,
       "growth": {
-        "hp": 10,
-        "pow": 5,
-        "skl": 5,
-        "spd": 5,
-        "def": 0,
-        "res": 0,
-        "lck": 0
+        "hp": 50,
+        "pow": 45,
+        "skl": 45,
+        "spd": 45,
+        "def": 30,
+        "res": 20,
+        "lck": 40
       },
       "promotionGain": {
         "hp": 0,
