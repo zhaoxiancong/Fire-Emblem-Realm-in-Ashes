@@ -105,5 +105,98 @@ cat <<'HINT'
   还原单个文件：           git checkout HEAD -- <文件>
   还原全部改动：           git checkout HEAD -- .
 HINT
+
+# ── 5. README 文档表：版本号核对 ──────────────────────────────
+# 背景：README.md 的「设计文档」表里写着每份文档的版本号，但**它不会自动跟着文档走**。
+#       2026-09-25 实测：6 处版本号集体过期（docs/3 写 v0.2 实际 v0.5、docs/5 写 v0.7 实际 v0.17 …）。
+#       本节把「README 表」与「各文档头部」逐项对拍，不一致就报出来。
+echo ""
+echo "--- 5. README 文档表：版本号核对 ---"
+PYBIN="$(command -v python3 2>/dev/null || command -v python 2>/dev/null)"
+if [ -z "$PYBIN" ]; then
+  echo "  （未找到 python，跳过本节）"
+else
+  "$PYBIN" - <<'PYCHECK'
+import os, re, subprocess, sys
+
+root = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+                      capture_output=True, text=True).stdout.strip() or "."
+readme = os.path.join(root, "README.md")
+if not os.path.isfile(readme):
+    print("  （找不到 README.md，跳过）"); sys.exit(0)
+
+# README 表里的 路径 -> 版本
+rows = {}
+for ln in open(readme, encoding="utf-8"):
+    m = re.match(r"^\|\s*\[`([^`]+)`\]\(([^)]+)\)\s*\|.*\|\s*(v\d+\.\d+)\s*\|\s*$", ln)
+    if m:
+        rows[m.group(2)] = m.group(3)
+
+def doc_version(path):
+    """从文档头部取版本号。
+    优先匹配『版本声明行』（形如 `> 版本：v0.5` / `**文档版本**：v1.2` / `# … v0.5`），
+    取不到再退化到「前 12 行里任意 vN.N」。
+    返回 (版本, 状态)：状态 ∈ {ok, 文件缺失, 未识别版本}
+    """
+    p = None
+    for cand in (os.path.join(root, path), path, os.path.join(".", path)):
+        if os.path.isfile(cand):
+            p = cand
+            break
+    if p is None:
+        return None, "文件缺失"
+    try:
+        head = [ln.rstrip("\n") for ln in list(open(p, encoding="utf-8"))[:40]]
+    except Exception:
+        return None, "未识别版本"
+    # ① 版本声明行（最可靠）—— 头部块可能到 20 行左右（如 `**文档版本**：v1.17`）
+    for ln in head[:25]:
+        if re.search(r"(版本|version|Version)", ln):
+            m = re.search(r"v?(\d+\.\d+)", ln)
+            if m:
+                return "v" + m.group(1), "ok"
+    # ② 退化：标题行里的 vN.N
+    for ln in head[:12]:
+        if ln.startswith("#"):
+            m = re.search(r"v(\d+\.\d+)", ln)
+            if m:
+                return "v" + m.group(1), "ok"
+    # ③ 再退化：前 12 行任意 vN.N
+    for ln in head[:12]:
+        m = re.search(r"v(\d+\.\d+)", ln)
+        if m:
+            return "v" + m.group(1), "ok"
+    return None, "未识别版本"
+
+bad, missing = [], []
+for path, ver in sorted(rows.items()):
+    real, why = doc_version(path)
+    if real is None:
+        bad.append((path, ver, why))
+    elif real != ver:
+        bad.append((path, ver, real))
+
+# docs/ 下有、README 表里没有
+docs = sorted(f for f in os.listdir(os.path.join(root, "docs"))
+              if f.endswith(".md"))
+for f in docs:
+    rel = "docs/" + f
+    if rel not in rows:
+        missing.append(rel)
+
+if not bad and not missing:
+    print("  ✅ README 文档表与各文档头部一致（共 %d 份）" % len(rows))
+else:
+    for path, ver, real in bad:
+        if real in ("文件缺失", "未识别版本"):
+            print("  ⚠️ %s：%-40s（README 写 %s）⇒ 建议给该文档头部补一行「> 版本：vX.Y」" % (real, path, ver))
+        else:
+            print("  ⚠️ 版本号过期：%-40s README=%s  实际=%s" % (path, ver, real))
+    for rel in missing:
+        print("  ⚠️ README 表缺行：%s" % rel)
+    print("  ⇒ 请同步 README.md 的「设计文档」表后再提交")
+PYCHECK
+fi
+
 echo ""
 echo "⚠️  内容损坏（① ② ③ 类）一律还原，不要提交。详见 GIT_WORKFLOW.md §6"
