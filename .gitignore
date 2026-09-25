@@ -1,20 +1,32 @@
-# ============ Godot 4 ============
-.godot/
-/android/
-export_presets.cfg
-export_credentials.cfg
-*.tmp
-*.log
-mono_crash.*.json
+# ============ 本仓库的定位（先读这段） ============
+# 本仓库只放「原创内容 + 工具 + 文档」，不含框架源码、不含构建产物。
+# 框架（fireemblem8-expansion）是只读依赖，由 framework.lock 钉死，
+# 落在 WSL 侧 ~/projects/fireemblem8-expansion，构建产物也在那边。
+# 因此本仓库几乎不会产生二进制垃圾——下面的规则是兜底防线。
 
-# ============ 构建产物 ============
+# ============ 构建产物（兜底：万一有人在 Windows 侧误构建） ============
 build/
 dist/
-*.pck
-*.apk
-*.aab
-*.exe
-*.zip
+*.gba
+*.elf
+*.map
+*.o
+*.a
+*.sav
+*.ss0
+*.ss1
+*.bps
+*.ups
+*.patch
+
+# 同步脚本的中间日志（正式记录落 ~/shanhe-logs/，不入库）
+/shanhe-logs/
+prewrite-*.sha1
+*.sync.log
+
+# ============ 框架工作副本（误克隆到本目录时的防线） ============
+# 正常情况下框架在 WSL 侧，不该出现在这里
+/fireemblem8-expansion/
 
 # ============ 系统 / 编辑器 ============
 .DS_Store
@@ -24,8 +36,10 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+*~
 
 # ============ 临时文件 ============
+*.tmp
 *.orig
 *.rej
 *.bak
