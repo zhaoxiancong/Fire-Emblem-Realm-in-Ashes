@@ -789,38 +789,64 @@ else
 fi
 
 # ── 3c''. 框架补丁（★ 已知偏离：本通道会覆写框架文件）──
-# 仅用于「框架缺陷、且数据层修不了」的情形。当前仅一个补丁：
-#   uimenu-empty-menu-guard —— 教学关卡 Menu_OnInit 读未初始化 menuItems[] 导致
-#   野指针跳转（实机复现 PC=0x708E02B4）。详见 docs/5 §5.7 / docs/6 §3.4g。
+# 仅用于「框架缺陷、且数据层修不了」的情形。当前补丁：
+#   prologue/ch1-tutorial-keep-wait —— 教学关 DISABLEOPTIONS 关掉了「待機」，
+#     可见菜单项归零 → Menu_OnInit 读未初始化 menuItems[] 野指针崩溃（实机已复现）。
+#   weapontriangle-magic-ring —— 魔法环的【手写参考块】需与三才法环一致，
+#     否则 round-trip 报 6 diagnostics。
+#   shenqi-* —— 神器「不入三环」所需的属性位与三角守卫（见 docs/5 §5.8）。
 # 形式：unified diff，基线 = framework.lock 钉住的 commit。
-# 幂等：先 `git checkout HEAD -- <目标>` 还原，再 apply；apply 失败即中止
-#       （宁可不构建，也不要静默漏补 —— 漏补会退回"崩溃但没人知道"）。
+#
+# 幂等：**两阶段** —— ① 先把所有目标文件各还原一次；② 再按文件名顺序 apply。
+#   ⚠️⚠️ 不能"每个补丁前各自 checkout"：同一文件有多个补丁时，后者的 checkout
+#      会把前一个补丁的成果**整个抹掉**，而日志上看是"两个都成功"（静默丢补）。
+#      —— 这是 2026-09-25 加第二个 bmbattle.c 补丁时实测发现的缺陷，已修。
+#   apply 失败即中止（宁可不构建，也不要静默漏补）。
+#   末尾校验「实际应用数 == 预期数」，避免循环体某次 continue 静默漏掉补丁。
 FRAMEWORK_PATCHES="$(find "$CONTENT_DIR/framework-patch" -maxdepth 1 -type f -name '*.patch' 2>/dev/null | sort)"
 if [ -n "$FRAMEWORK_PATCHES" ]; then
   PATCH_N=0
-  while IFS= read -r p; do
-    [ -n "$p" ] || continue
-    name="$(basename "$p")"
-    target="$(grep -m1 '^+++ b/' "$p" | sed 's|^+++ b/||')"
-    if [ -z "$target" ]; then
-      bad "[补丁] $name 解析不出目标文件（缺 '+++ b/<path>' 行）"; continue
-    fi
-    if [ "$DRY_RUN" = "1" ]; then
-      act "[预演] 框架补丁 $name → $target"
-    else
-      if ! ( cd "$FRAMEWORK_DIR" && git checkout HEAD -- "$target" ) 2>/dev/null; then
-        bad "[补丁] $name 无法还原 $target（文件不存在或不在 git 追踪内）"; continue
+  # 去重后的目标清单（同一文件多个补丁只还原一次）
+  PATCH_TARGETS="$(while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      grep -m1 '^+++ b/' "$p" 2>/dev/null | sed 's|^+++ b/||'
+    done <<< "$FRAMEWORK_PATCHES" | sed '/^$/d' | sort -u)"
+  n_patches=$(printf '%s\n' "$FRAMEWORK_PATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
+  n_targets=$(printf '%s\n' "$PATCH_TARGETS" | sed '/^$/d' | wc -l | tr -d ' ')
+
+  if [ "$DRY_RUN" = "1" ]; then
+    act "[预演] 框架补丁 $n_patches 个 → 目标文件 $n_targets 个"
+    printf '%s\n' "$PATCH_TARGETS" | sed '/^$/d;s|^|      → |'
+  else
+    # 阶段 1：每个目标文件只还原一次
+    while IFS= read -r t; do
+      [ -n "$t" ] || continue
+      if ! ( cd "$FRAMEWORK_DIR" && git checkout HEAD -- "$t" ) 2>/dev/null; then
+        die "[补丁] 无法还原 $t（文件不存在或不在 git 追踪内）"
+      fi
+    done <<< "$PATCH_TARGETS"
+
+    # 阶段 2：按序 apply（文件已还原，此处不再 checkout）
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      name="$(basename "$p")"
+      target="$(grep -m1 '^+++ b/' "$p" | sed 's|^+++ b/||')"
+      if [ -z "$target" ]; then
+        die "[补丁] $name 解析不出目标文件（缺 '+++ b/<path>' 行）"
       fi
       if ( cd "$FRAMEWORK_DIR" && patch -p1 -N --no-backup-if-mismatch -i "$p" ) >> "$REPORT" 2>&1; then
         ok "[补丁] $name 已应用 → $target"
         PATCH_N=$((PATCH_N+1))
       else
-        bad "[补丁] $name 应用失败 —— 上游可能已改动该文件上下文"
+        bad "[补丁] $name 应用失败 —— 上游可能已改动该文件上下文，或与同文件其它补丁的上下文重叠"
         die "框架补丁无法应用，需人工 rebase（见 docs/6 §3.4g）"
       fi
-    fi
-  done <<< "$FRAMEWORK_PATCHES"
-  [ "$DRY_RUN" = "1" ] || warn "★ 已应用 $PATCH_N 个框架补丁 —— 本项目【已知偏离】，升级框架时必须重新评估"
+    done <<< "$FRAMEWORK_PATCHES"
+
+    [ "$PATCH_N" -eq "$n_patches" ] \
+      || die "[补丁] 预期应用 $n_patches 个，实际只应用 $PATCH_N 个 —— 有补丁被静默跳过"
+  fi
+  [ "$DRY_RUN" = "1" ] || warn "★ 已应用 $PATCH_N 个框架补丁 / $n_targets 个目标文件 —— 本项目【已知偏离】，升级框架时必须重新评估"
 else
   dim "content/framework-patch/ 无补丁 —— 框架保持只读（正常状态）"
 fi
@@ -987,6 +1013,18 @@ else
   CUR="$(mktemp)"
   git -C "$FRAMEWORK_DIR" status --porcelain > "$CUR"
 
+  # ★ 框架补丁的目标文件：**从 content/framework-patch/*.patch 实时解析**，不写死在白名单里。
+  #   原因（2026-09-25 实测）：白名单是本文件里的第二个硬编码表，
+  #   每加一个改「新文件」的补丁就得手改一次；漏改的表现是"误报预期外"（噪声），
+  #   而噪声会训练出"忽略告警"的习惯 —— 那这条防线就废了。
+  PATCH_TARGETS_FILE="$(mktemp)"
+  if [ -d "$CONTENT_DIR/framework-patch" ]; then
+    find "$CONTENT_DIR/framework-patch" -maxdepth 1 -type f -name '*.patch' 2>/dev/null \
+      | while IFS= read -r p; do
+          grep -m1 '^+++ b/' "$p" 2>/dev/null | sed 's|^+++ b/||'
+        done | sed '/^$/d' | sort -u > "$PATCH_TARGETS_FILE"
+  fi
+
   if [ ! -s "$CUR" ]; then
     warn "框架侧无任何改动 —— 若你确实铺了内容，说明铺设没生效（检查 content/ 是否为空）"
   else
@@ -1008,20 +1046,22 @@ else
         src/data_characters.c|src/data_classes.c|src/data_items.c|src/data_supports.c) ;;  # ★ 预期（B' 回填目标，见 3a'）
         docs/game_locale_text_edits.md) ;;                        # ★ 预期（文本台账，见 3b'）
         fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
-        src/events/*.h) ;;                                        # ★★ 预期（框架补丁：教学脚本 keep-wait，见 3c''）
-        src/bmbattle.c) ;;                                        # ★★ 预期（框架补丁：weapontriangle 参考块，见 3c''）
         reports/*) ;;                                             # ★ 预期（generated-data 的 inventory/审计报告是 generate 的正常副产物）
-        src/uimenu.c) ;;                                          # ★★ 预期（框架补丁：历史目标，见 3c''）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)
-          printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
-          UNEXPECTED=$((UNEXPECTED+1))
+          # ★★ 框架补丁目标：动态判定（白名单不再需要手跟，见上面 PATCH_TARGETS_FILE 的说明）
+          if [ -s "$PATCH_TARGETS_FILE" ] && grep -qxF "$path" "$PATCH_TARGETS_FILE"; then
+            :
+          else
+            printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
+            UNEXPECTED=$((UNEXPECTED+1))
+          fi
           ;;
       esac
     done < "$CUR"
 
     if [ "$UNEXPECTED" -eq 0 ]; then
-      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/events/*.h(框架补丁:教学脚本)、src/shanhe_*.c、Makefile、build/）"
+      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/shanhe_*.c、Makefile、build/，以及 content/framework-patch/ 声明的全部补丁目标）"
     else
       warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
       dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"

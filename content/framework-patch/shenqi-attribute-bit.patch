@@ -1,0 +1,37 @@
+# 山河烬 框架补丁: shenqi-attribute-bit
+#
+# 目标文件: include/bmitem.h   (框架只读依赖 -> 以 unified diff 形式最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么(1 行):
+#   在 `IA_*` 道具属性位枚举里新增 `IA_SHENQI = (1 << 22)`。
+#
+# 为什么需要:
+#   《山河烬》神器（★ 档，9 件）通用规则第 1 条要求「不入三环」——
+#   但神器按类型（剑/枪/刀/锤/弓…）会自然落进环内，光靠"类型"无法豁免。
+#   属性位是唯一不破存档的实现通道：`ItemData.attributes` 是 u32，道具数据存 ROM、
+#   不进存档，加一个位**不影响任何存档布局**（对比：扩武器类型要动 ranks[8]，老档全废）。
+#
+#   实测位占用：bit 0~21 已用（IA_WEAPON .. IA_LOCK_7），**bit 22~31 空闲** ⇒ 取 bit 22。
+#   （曾评估"复用已废弃位"：`IA_HAMMERNE`(bit 9) 在 FE8 里仍被 src/ 12 处代码、
+#    4 个道具实际使用，**不是死位**，故不可复用。）
+#
+# 配套: shenqi-no-weapon-triangle.patch —— 同一件事的另一半（改 src/bmbattle.c）。
+#       ⚠️ 两半必须同时存在，只打这一个不会产生任何效果。
+#
+# 顺带收益: items schema 的 IA_* 白名单是**从本头文件实时解析**的
+#           （scripts/generated_data/items/schema.py 的 read_item_attributes），
+#           所以 items.json 立即可写 `"attributes": ["IA_SHENQI"]`，无需另改校验代码。
+#
+# 上游若自行引入等价机制，本补丁可删除。详见 docs/5 §5.8 与 docs/4 R-26。
+#
+--- a/include/bmitem.h
++++ b/include/bmitem.h
+@@ -74,6 +74,7 @@ enum {
+     IA_LOCK_5         = (1 << 19),
+     IA_LOCK_6         = (1 << 20),
+     IA_LOCK_7         = (1 << 21),
++    IA_SHENQI         = (1 << 22), // Shanhe: divine relic -- exempt from the weapon triangle
+ 
+     // Helpers
+     IA_REQUIRES_WEXP = (IA_WEAPON | IA_STAFF),

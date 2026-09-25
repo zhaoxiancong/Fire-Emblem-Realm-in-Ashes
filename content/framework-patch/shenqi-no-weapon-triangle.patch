@@ -1,0 +1,47 @@
+# 山河烬 框架补丁: shenqi-no-weapon-triangle
+#
+# 目标文件: src/bmbattle.c   (框架只读依赖 -> 以 unified diff 形式最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么(7 行): `BattleApplyWeaponTriangleEffect()` 开头加一道守卫 ——
+#   任意一方装备了带 `IA_SHENQI` 的武器时，直接 return，双方都不吃三角修正。
+#
+# 为什么这样写是对的（不是猜的）:
+#   ① `wTriangleHitBonus` / `wTriangleDmgBonus` 在 `InitBattleUnit()` 里已归零
+#      （src/bmbattle.c:236-237 与 327-328）⇒ 提前 return 等价于"双方修正 = 0"。
+#   ② 本函数在 `BattleGenerateSimulationInternal` / `RealInternal` 里被调用，
+#      位置在 `SetBattleUnitWeapon` **之后**、`BattleGenerate()`（→ ComputeBattleUnitStats）
+#      **之前** ⇒ 数值计算确实会读到 0。
+#   ③ 写法与本文件既有的 `IA_UNCOUNTERABLE` 守卫同构
+#      （`if ((gBattleActor.weaponAttributes | gBattleTarget.weaponAttributes) & IA_UNCOUNTERABLE)`），
+#      属于框架自身惯用法。
+#
+# 语义: 神器「对兵刃三环既不克制也不被克制」⇒ 只要一方是神器，**双方**都无修正
+#       （与"只豁免神器自己"不同，这是设计文档 docs/3 §3.1 规则 1 的原话）。
+#       副作用：reaver（`IA_REVERTTRIANGLE`）的反转也一并跳过 —— 神器本就不该被反转。
+#
+# 配套: shenqi-attribute-bit.patch —— 同一件事的另一半（定义 IA_SHENQI 位）。
+#
+# ⚠️ 同文件已有另一个补丁 `weapontriangle-magic-ring.patch`（改第 ~56-70 行的
+#    `#if !GENERATED_DATA_WEAPONTRIANGLE_LINKED` 参考块）。两者上下文相隔约 1900 行，
+#    互不重叠，可共存 —— 但**前提是 shanhe-build.sh 的 3c'' 已改为"两阶段"应用**
+#    （先统一还原目标，再按序 apply）。旧版"每个补丁前各自 checkout"会把先打的补丁抹掉。
+#
+# 上游若自行引入等价机制，本补丁可删除。详见 docs/5 §5.8 与 docs/4 R-26。
+#
+--- a/src/bmbattle.c
++++ b/src/bmbattle.c
+@@ -1944,6 +1944,13 @@ void BattleApplyReaverEffect(struct BattleUnit* attacker, struct BattleUnit* def
+ void BattleApplyWeaponTriangleEffect(struct BattleUnit* attacker, struct BattleUnit* defender) {
+     const struct WeaponTriangleRule* it;
+ 
++    /* Shanhe: divine relics (IA_SHENQI) neither give nor receive weapon-triangle
++     * bonuses -- "divine relics stand outside the mortal weapon lineages".
++     * Early return is safe: InitBattleUnit() zeroes both wTriangle*Bonus fields
++     * and this runs before ComputeBattleUnitStats(). */
++    if ((attacker->weaponAttributes | defender->weaponAttributes) & IA_SHENQI)
++        return;
++
+     for (it = sWeaponTriangleRules; it->attackerWeaponType >= 0; ++it) {
+         if ((attacker->weaponType == it->attackerWeaponType) && (defender->weaponType == it->defenderWeaponType)) {
+             attacker->wTriangleHitBonus = it->hitBonus;
