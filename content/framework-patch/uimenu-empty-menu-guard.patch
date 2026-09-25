@@ -2,30 +2,33 @@
 #
 # 目标文件: src/uimenu.c   (框架只读依赖 -> 以 unified diff 形式最小化覆写)
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
-# 版本    : v4 (2026-09-25)
-#   v1 只护 Menu_OnInit            -> 立刻在 ProcessMenuSelectInput 崩第二次
-#   v2 改根治(占位预填充)          -> 又在 ProcessMenuDpadInput 崩第三次
-#   v3 补导航保护                  -> 不崩了, 但"空菜单"仍存在(显示不出来)
-#   v4 引擎层根因: 零项菜单直接 Proc_End  (#4/5)
+# 版本    : v5 (2026-09-25)
+#   v1 只护 Menu_OnInit             -> 立刻在 ProcessMenuSelectInput 崩第二次
+#   v2 改根治(占位预填充)            -> 又在 ProcessMenuDpadInput 崩第三次
+#   v3 补导航保护                   -> 不崩了, 但空菜单仍存在(显示不出来)
+#   v4 空菜单 Proc_End              -> 不崩但**卡死**! Proc_End 不能用在这里:
+#                                      本函数跑在该 Proc 自己的脚本回调里, 就地终止
+#                                      会破坏脚本遍历.
+#   v5 【本版】零项菜单改走框架自身的 EndMenu  -> 安全关闭, 不崩不卡
 #
 # 根因(源码级):
-#   src/events/prologue-tutorials.h  EventScr_Prologue_Tutorial5
+#   src/events/prologue-tutorials.h EventScr_Prologue_Tutorial5
 #     DISABLEOPTIONS(~EVENT_MENUOVERRIDE_ATTACK)   // 隐藏除「攻撃」外全部(含待機)
-#   src/bmmenu.c:2451  AttackCommandUsability
+#   src/bmmenu.c:2451 AttackCommandUsability
 #     if (gActiveUnit->state & US_HAS_MOVED) return MENU_NOTSHOWN;   // 已行动 -> 不可用
-#   => 两者叠加: 可见项 = 0  (一个合法状态)
-#   src/uimenu.c  Menu_Setup 得到 itemCount==0, menuItems[] 未写入(Proc 槽位复用不清零)
-#   => 后续任何 menuItems[...] 解引用读到残留垃圾 -> bx 跳到非法地址
+#   => 可见项 = 0 (合法状态)
+#   src/uimenu.c Menu_Setup 得到 itemCount==0 且 menuItems[] 未写入
+#   => 消费端解引用残留垃圾 -> 野指针跳飞
 #
 # 实机三次复现:
-#   PC=0x708E02B4 LR=0x080BE6D7   Menu_OnInit
-#   PC=0xF846C0E6 LR=0x080BF0F7   ProcessMenuSelectInput
-#   PC=0xD100D100 LR=0x080BEFDB   ProcessMenuDpadInput (itemCurrent 0-- 回绕成 255)
+#   PC=0x708E02B4 LR=0x080BE6D7  Menu_OnInit
+#   PC=0xF846C0E6 LR=0x080BF0F7  ProcessMenuSelectInput
+#   PC=0xD100D100 LR=0x080BEFDB  ProcessMenuDpadInput (itemCurrent 0-- 回绕 255)
 #
-# 修法(5 处): (1)(2)(3) 预处理/边界 -> (4) 零项菜单 Proc_End [根因] -> (5) 导航防御
-#   (1)(2)(3)(5) 是防御纵深; 真正消除问题的是 (4): 让"零项菜单"这个非法状态不存在.
+# 修法(6 处): (1)(2)(3)(5) 防御纵深 -> (4) 立即早退不破坏脚本 -> (6) 根因:
+#   用框架既有路径 EndMenu() 关闭零项菜单(与 MENU_STATE_DOOMED 分支同一条路).
 #
-# ⚠️ 上游修复到位后应删除本补丁. 上游若改动该文件上下文, apply 会失败 -> 人工 rebase.
+# ⚠️ 上游修复到位后应删除本补丁. 上游若改动这些上下文, apply 失败 -> 人工 rebase.
 # 详见 docs/6 §3.4g / docs/5 §5.7.
 #
 --- a/src/uimenu.c
@@ -35,9 +38,9 @@
      PROC_BLOCK
  };
  
-+/* == shanhe PATCH: uimenu-empty-menu-guard (1/5) ==
++/* == shanhe PATCH: uimenu-empty-menu-guard (1/6) ==
 + * 安全占位菜单项: def 指向全 NULL 回调的定义, 供 Menu_Setup 预填充.
-+ * 防御纵深: 即使将来又出现未被覆盖的解引用点, 读到的也是 no-op 对象而非野指针.
++ * 防御纵深: 即使将来又出现未覆盖的解引用点, 读到的也是 no-op 对象而非野指针.
 + */
 +static CONST_DATA struct MenuItemDef  sShanhePlaceholderMenuItemDef = {0};
 +static CONST_DATA struct MenuItemProc sShanhePlaceholderMenuItem    = { .def = &sShanhePlaceholderMenuItemDef };
@@ -51,7 +54,7 @@
      if (rect.h < 0)
          proc->state |= MENU_STATE_NOTSHOWN;
  
-+    /* shanhe PATCH (2/5): 预填充安全占位项 —— Proc_Start 复用槽位不清零,
++    /* shanhe PATCH (2/6): 预填充安全占位项 —— Proc_Start 复用槽位不清零,
 +     * 空/部分填充时 menuItems[] 会留着上一个 Proc 的残留数据并被解引用. */
 +    for (i = 0; i < MENU_ITEM_MAX; ++i)
 +        proc->menuItems[i] = (struct MenuItemProc*)&sShanhePlaceholderMenuItem;
@@ -64,30 +67,25 @@
              availability = def->menuItems[i].isAvailable(&def->menuItems[i], i);
  
 -        if (availability != MENU_NOTSHOWN)
-+        /* shanhe PATCH (3/5): 边界保护 —— 条目可达 20 条, menuItems[] 仅 11 格,
++        /* shanhe PATCH (3/6): 边界保护 —— 条目可达 20 条, menuItems[] 仅 11 格,
 +         * 越界会写到紧跟其后的 itemCount/itemCurrent/itemPrevious/state 字段. */
 +        if (availability != MENU_NOTSHOWN && itemCount < MENU_ITEM_MAX)
          {
              struct MenuItemProc* item = Proc_Start(sProc_MenuItem, proc);
              proc->menuItems[itemCount++] = item;
  
-@@ -300,8 +314,24 @@
+@@ -300,8 +314,19 @@
  {
      if (proc->def->onInit)
          proc->def->onInit(proc);
  
-+    /* == shanhe PATCH (4/5): 引擎层根因修法 —— 零项菜单不应存在 ==
-+     * 成因: 教学内容(教学章 DISABLEOPTIONS(~ATTACK) 隐藏除攻撃外全部) 与
-+     *       引擎判定(单位已行动时 AttackCommandUsability 返回 MENU_NOTSHOWN)
-+     *       叠加, 会产生 itemCount == 0 的菜单 —— 此时 menuItems[] 一个字节都没写.
-+     * 处理: 直接把该菜单 Proc 结束, 交还调用方(若是 Proc_StartBlocking 会自动解锁父级),
-+     *       而不是留下一个空菜单对象给 8 处解引用去踩.
++    /* == shanhe PATCH (4/6): 零项菜单就地早退 ==
++     * ⚠️ 这里**不能** Proc_End(proc): 本函数是在该 Proc 自己的脚本回调里执行的,
++     *    就地终止会破坏脚本遍历 -> 实机表现为"不崩但卡死"(v4 踩过).
++     *    真正的关闭放在 Menu_OnIdle, 走框架自身的 EndMenu 路径 (见 6/6).
 +     */
 +    if (proc->itemCount == 0)
-+    {
-+        Proc_End(proc);
 +        return;
-+    }
 +
 +    if (proc->itemCurrent >= proc->itemCount)
 +        proc->itemCurrent = 0;
@@ -96,14 +94,36 @@
          proc->menuItems[proc->itemCurrent]->def->onSwitchIn(proc, proc->menuItems[proc->itemCurrent]);
  }
  
-@@ -428,8 +458,19 @@
+@@ -379,8 +404,21 @@
+ void Menu_OnIdle(struct MenuProc* proc)
+ {
+     int x, y, actions;
+ 
++    /* == shanhe PATCH (6/6): 引擎层根因修法 —— 零项菜单用框架自身的 EndMenu 关闭 ==
++     * 成因: 教学章 DISABLEOPTIONS(~EVENT_MENUOVERRIDE_ATTACK) 隐藏除「攻撃」外全部,
++     *       而单位已行动时 AttackCommandUsability 返回 MENU_NOTSHOWN
++     *       (src/bmmenu.c:2451, if (state & US_HAS_MOVED)) => 可见项 = 0.
++     * 处理: 这种菜单不应存在 —— 直接走框架既有的结束路径 EndMenu()
++     *       (与上面 MENU_STATE_DOOMED 分支同一条路), 而不是 Proc_End 硬终止.
++     */
++    if (proc->itemCount == 0)
++    {
++        EndMenu(proc);
++        return;
++    }
++
+     if (proc->state & MENU_STATE_FROZEN)
+     {
+         GetMenuCursorPosition(proc, &x, &y);
+         DisplayFrozenUiHand(x, y);
+@@ -428,8 +466,19 @@
  }
  
  void ProcessMenuDpadInput(struct MenuProc* proc)
  {
-+    /* shanhe PATCH (5/5): 防御纵深 —— 万一仍有空菜单存活, 也禁止导航.
++    /* shanhe PATCH (5/6): 防御纵深 —— 万一仍有空菜单存活, 也禁止导航.
 +     * 原逻辑 itemCount==0 时按上键会走 "itemCurrent = itemCount; itemCurrent--;"
-+     * 得到 255, 进而 menuItems[255] 越界 (实机复现 PC=0xD100D100 LR=0x080BEFDB).
++     * 得到 255, 进而 menuItems[255] 越界 (实机 PC=0xD100D100 LR=0x080BEFDB).
 +     */
 +    if (proc->itemCount == 0)
 +    {
