@@ -85,6 +85,9 @@ chmod +x .githooks/post-commit
 ```bash
 cd "D:/workbuddy/FireEmblem Realm-in-Ashes"
 
+# 0. 先体检：识别「格式化伪 diff」与「内容损坏」（只读，不改任何文件）
+bash tools/git-health.sh
+
 # 1. 看清楚改了什么
 git status
 git diff
@@ -122,7 +125,7 @@ git push origin main
 | ② | **中文字被 HTML 实体转义** | `在 Clash 里打开` → `在 Clash 里打&#x5F00;` | **内容损坏** |
 | ③ | **Markdown 强调符被重排 + 插入空行** | `"... *g塠艌 ..."` → `"... g塠艌 ..."*`，表格被空行切断 | **内容损坏** |
 
-**识别**：
+**识别**（或直接跑 `bash tools/git-health.sh`，它会逐文件列出「忽略空白后的真实差异」）：
 
 ```bash
 git diff --ignore-cr-at-eol --stat   # 先排除换行符差异
