@@ -992,7 +992,8 @@ else
         src/data_characters.c|src/data_classes.c|src/data_items.c|src/data_supports.c) ;;  # ★ 预期（B' 回填目标，见 3a'）
         docs/game_locale_text_edits.md) ;;                        # ★ 预期（文本台账，见 3b'）
         fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
-        src/uimenu.c) ;;                                          # ★★ 预期（框架补丁，见 3c''：已知偏离）
+        src/events/*.h) ;;                                        # ★★ 预期（框架补丁：教学脚本 keep-wait，见 3c''）
+        src/uimenu.c) ;;                                          # ★★ 预期（框架补丁：历史目标，见 3c''）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)
           printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
@@ -1002,7 +1003,7 @@ else
     done < "$CUR"
 
     if [ "$UNEXPECTED" -eq 0 ]; then
-      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/uimenu.c(框架补丁)、src/shanhe_*.c、Makefile、build/）"
+      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/events/*.h(框架补丁:教学脚本)、src/shanhe_*.c、Makefile、build/）"
     else
       warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
       dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"

@@ -1,0 +1,38 @@
+# 山河烬 框架补丁: prologue-tutorial-keep-wait
+#
+# 目标文件: src/events/prologue-tutorials.h   (框架只读依赖 -> 以 unified diff 形式最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么(内容层根因):
+#   教学脚本用 DISABLEOPTIONS(~EVENT_MENUOVERRIDE_X) 做“除 X 外全部禁用”。
+#   当 X != WAIT 时，「待機」也被隐藏 -> 一旦 X 此刻也不可用(例: 单位已行动时
+#   AttackCommandUsability 返回 MENU_NOTSHOWN, src/bmmenu.c:2451),
+#   单位行动菜单的可见项数就是 0 -> 空菜单 -> 消费端解引用未写入的 menuItems[]
+#   -> 野指针崩溃(实机: PC=0x708E02B4 / 0x0xD100D100 等).
+#
+# 修法: 统一补上 & ~EVENT_MENUOVERRIDE_WAIT，即“禁用一切时永远保留待機”。
+#   这样菜单至少有一项，整条崩溃链不再成立，且**不改引擎**。
+#
+# 说明: 这是内容层修法(推荐的根因修法)。引擎层 uimenu.c 的补丁已回退。
+#   上游若改动该文件上下文，apply 失败 -> 人工 rebase (docs/6 §3.4g)。
+#
+--- a/src/events/prologue-tutorials.h
++++ b/src/events/prologue-tutorials.h
+@@ -150,7 +150,7 @@
+ CONST_DATA EventListScr EventScr_Prologue_Tutorial5[] = {
+     NoFade
+     ASMC(PlayPhaseForcePressAButtonInRangeDisp)
+-    DISABLEOPTIONS(~EVENT_MENUOVERRIDE_ATTACK)
++    DISABLEOPTIONS(~EVENT_MENUOVERRIDE_ATTACK & ~EVENT_MENUOVERRIDE_WAIT)
+     IGNORE_KEYS(R_BUTTON | START_BUTTON | B_BUTTON)
+ 
+     EvtEnqueueConditionalTutCall(
+@@ -305,7 +305,7 @@
+         EventScr_Prologue_TutorialC,
+         EventScr_Prologue_TutorialB
+     )
+-    DISABLEOPTIONS(~EVENT_MENUOVERRIDE_ATTACK)
++    DISABLEOPTIONS(~EVENT_MENUOVERRIDE_ATTACK & ~EVENT_MENUOVERRIDE_WAIT)
+     IGNORE_KEYS(R_BUTTON | START_BUTTON | B_BUTTON)
+     ENDA
+ };
