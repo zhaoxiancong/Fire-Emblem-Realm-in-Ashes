@@ -111,7 +111,35 @@ git push origin main
 - [ ] 改动涉及的文档头部版本号已 +1
 - [ ] 跨文档引用没写死绝对路径（一律用相对路径，如 `docs/3.游戏数值设定.md`）
 - [ ] 数值类改动只改 `3.游戏数值设定.md`，没在设计文档里复制数值
+- [ ] `bash tools/git-health.sh` 的**第 0 步**无 CRLF 告警
 - [ ] diff 异常庞大时，先用 `git diff --ignore-cr-at-eol` / `--ignore-all-space` 排除「格式化伪 diff」
+
+### ⚠️ 已知：CRLF/LF 混用 → 「假 modified」与「整文件伪 diff」（2026-09-25 定位）
+
+**现象**：`git status` 报某文件被修改，但 `git diff` **输出为空**（连 `--ignore-*` 都不用加）。
+
+**根因**（实测定位）：`.gitattributes` 规定 `* text=auto eol=lf`（仓库内统一 LF），但本地 `core.autocrlf` 若为 `true`（Git for Windows 常见默认），Windows 侧工具会把新写的文件存成 **CRLF**。两者冲突时：
+
+- 该文件在 `git status` 里表现为「modified」，但 `git diff` 为空；
+- 一旦编辑，会产生**整文件、逐行的伪 diff**（其实只是行尾差异），把真实改动淹没。
+
+**实测样本（首次定位）**：`docs/1`、`docs/2`、`docs/3`、`docs/5`、`docs/8` 这 5 个文档的工作区副本全是 CRLF（各 400~950 行），而仓库内存的是 LF → `git status` 假报 modified、`git diff` 为空。
+
+**修复（一次性）**：
+
+```bash
+git config core.autocrlf false                          # 让 .gitattributes(eol=lf) 独占控制（本地配置）
+rm -f <文件> && git checkout -- <文件>                   # 逐个把已污染的文件重新检出为 LF
+```
+
+> 2026-09-25 已执行：5 个文件全部转为 LF，`git status` 恢复干净。
+
+**日常检测**：`bash tools/git-health.sh` 的**第 0 步**会自动扫出所有含 CRLF 的受控文件（附行数），并打印修复命令。
+
+**预防**：
+
+- 换机 / 重装后，第一件事跑一次 `git config core.autocrlf false`。
+- 任何"无内容差异却报 modified"的文件，**先怀疑行尾**，再怀疑内容。
 
 ### ⚠️ 已知：外部工具会改写 `.md` 文件，且**可能损坏内容**
 

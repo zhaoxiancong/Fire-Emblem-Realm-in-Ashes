@@ -20,10 +20,41 @@ echo "  文档健康体检    $(date '+%Y-%m-%d %H:%M:%S')"
 echo "=================================================="
 echo ""
 
+# ---- 0. 行尾规范（CRLF 检测）—— 独立检查，总是执行 ----
+# 背景（2026-09-25 实测）：`.gitattributes` 规定 `* text=auto eol=lf`，
+# 但若本地 `core.autocrlf=true`，Windows 侧某些文件会被写成 CRLF。后果：
+#   ① git status 出现「假 modified」（git diff 为空却报改动）
+#   ② 未来编辑该文件时产生「整文件伪 diff」，掩盖真实改动
+echo "--- 0. 行尾规范（CRLF 检测）---"
+CR="$(printf '\r')"
+CRLF_FOUND=0
+while IFS= read -r f; do
+  n="$(grep -c "$CR" "$f" 2>/dev/null)"
+  n="${n:-0}"
+  if [ "$n" != "0" ]; then
+    printf '  ⚠️  %-46s CR行=%s\n' "$f" "$n"
+    CRLF_FOUND=$((CRLF_FOUND+1))
+  fi
+done < <(git ls-files | grep -vE '\.(png|jpg|jpeg|gif|ogg|wav|mp3|ttf|otf|psd|gba|bin|sav|o|a)$')
+
+if [ "$CRLF_FOUND" -eq 0 ]; then
+  echo "  ✅ 所有受版本控制的文本文件都是 LF（符合 .gitattributes）"
+else
+  echo ""
+  echo "  ⚠️  发现 $CRLF_FOUND 个含 CRLF 的文件 —— 修复方法："
+  echo "      git config core.autocrlf false            # 让 .gitattributes(eol=lf) 独占控制"
+  echo "      rm -f <文件> && git checkout -- <文件>     # 重新检出为 LF"
+fi
+echo ""
+
 PORCELAIN="$(git status --porcelain)"
 
 if [ -z "$PORCELAIN" ]; then
-  echo "✅ 工作区干净 —— 所有文件都与最后一次提交完全一致。"
+  if [ "$CRLF_FOUND" -eq 0 ]; then
+    echo "✅ 工作区干净，且行尾规范 —— 一切正常。"
+  else
+    echo "⚠️  工作区无内容改动，但有 $CRLF_FOUND 个文件行尾不规范（见上）。"
+  fi
   exit 0
 fi
 
