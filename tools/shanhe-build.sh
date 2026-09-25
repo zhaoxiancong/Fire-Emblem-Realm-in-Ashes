@@ -5,7 +5,7 @@
 # 本仓库（内容）→ 框架（只读依赖）→ 可玩 ROM
 #
 # 用法（在本仓库根目录跑）：
-#   bash tools/shanhe-build.sh                 # 完整：预检→校验→快照→铺设→构建→验产物→反查
+#   bash tools/shanhe-build.sh                 # 完整：预检→校验→快照→铺设→构建→验产物→导出→反查
 #   DRY_RUN=1 bash tools/shanhe-build.sh       # 预演：只打印将要做什么，不落盘、不构建
 #   STATUS=1  bash tools/shanhe-build.sh       # 查看框架侧当前被改了什么（只读）
 #   RESTORE=1 bash tools/shanhe-build.sh       # 一键还原框架到 framework.lock 的上游状态
@@ -14,6 +14,7 @@
 # 环境变量可覆盖：
 #   FRAMEWORK_DIR=/path   框架位置（默认 $HOME/projects/fireemblem8-expansion）
 #   CONTENT_DIR=/path     内容位置（默认本仓库的 content/）
+#   SHANHE_ROM_DIR=/path  导出目录（默认 /mnt/d/workbuddy/shanhe-rom）
 #   CLASH_PORT=7897       代理端口
 #
 # 规范：docs/6.方案B内容外置规划.md §3
@@ -624,6 +625,38 @@ else
 fi
 
 # ══════════════════════════════════════════
+# 第 5b 步 · 导出 ROM 到 Windows 侧（方便直接试玩）
+# ══════════════════════════════════════════
+H "第 5b 步 / 导出 ROM 到 Windows 侧"
+
+# 目标目录：Windows 的 D:\workbuddy\shanhe-rom 在 WSL 视角 = /mnt/d/workbuddy/shanhe-rom
+EXPORT_DIR="${SHANHE_ROM_DIR:-/mnt/d/workbuddy/shanhe-rom}"
+# 文件名派生自 lock 的 rom_size_label（32M → shanhe-cn-32m.gba），
+# 与 `启动山河烬中文版.cmd` 里写死的路径保持一致。
+ROM_LABEL="$(lock_get build rom_size_label)"; ROM_LABEL="${ROM_LABEL:-32M}"
+EXPORT_NAME="shanhe-cn-$(printf '%s' "$ROM_LABEL" | tr 'A-Z' 'a-z').gba"
+EXPORT_PATH="$EXPORT_DIR/$EXPORT_NAME"
+
+if [ "$DRY_RUN" = "1" ]; then
+  act "[预演] 将复制产物 → $EXPORT_PATH"
+elif [ ! -f "$FRAMEWORK_ROM" ]; then
+  warn "产物不存在，跳过导出"
+elif mkdir -p "$EXPORT_DIR" 2>/dev/null && cp -f "$FRAMEWORK_ROM" "$EXPORT_PATH" 2>/dev/null; then
+  EXPORT_SHA1="$(sha1sum "$EXPORT_PATH" | cut -c1-8)"
+  ok "已导出：$EXPORT_PATH"
+  dim "Windows 路径：D:\\workbuddy\\shanhe-rom\\$EXPORT_NAME"
+  if [ "$EXPORT_SHA1" = "$ROM_SHA1" ]; then
+    dim "SHA1 校验一致（$EXPORT_SHA1）✓"
+  else
+    warn "SHA1 不一致：源 $ROM_SHA1 vs 导出 $EXPORT_SHA1（复制可能被截断）"
+  fi
+  dim "双击启动：D:\\workbuddy\\shanhe-rom\\启动山河烬中文版.cmd"
+else
+  warn "导出失败（目录不可写？）：$EXPORT_DIR"
+  dim "可手动复制：cp \"$FRAMEWORK_ROM\" \"$EXPORT_PATH\""
+fi
+
+# ══════════════════════════════════════════
 # 第 6 步 · 反查
 # ══════════════════════════════════════════
 H "第 6 步 / 反查框架侧改动（防呆关键）"
@@ -674,11 +707,12 @@ if [ "$DRY_RUN" = "1" ]; then
   printf "  %s预演结束，未落盘%s\n" "$c_yellow" "$c_off"
 else
   printf "  产物：%s\n" "$FRAMEWORK_ROM"
+  printf "  导出：%s\n" "$EXPORT_PATH"
   printf "  日志：%s\n" "$REPORT"
   printf "  快照：%s\n" "$PREWRITE_SNAPSHOT"
   printf "\n  下一步：\n"
   printf "    · 查看框架被改了什么   → bash tools/shanhe-build.sh STATUS=1\n"
   printf "    · 一键还原框架         → bash tools/shanhe-build.sh RESTORE=1\n"
-  printf "    · 实机试玩             → mGBA 打开上述 ROM\n"
+  printf "    · 实机试玩             → 双击 D:\\workbuddy\\shanhe-rom\\启动山河烬中文版.cmd\n"
 fi
 exit 0
