@@ -3,10 +3,10 @@
 # 《山河烬》一键排错 + 自动修复（在 WSL/Ubuntu 内运行）
 # ------------------------------------------------------------
 # 用法（只需一行）：
-#   curl -fsSL https://raw.githubusercontent.com/zhaoxiancong/Fire-Emblem-Realm-in-Ashes/main/tools/wsl/7-fix-and-build.sh -o ~/7-fix.sh 2>/dev/null || cp "/mnt/d/workbuddy/FireEmblem Realm-in-Ashes/tools/wsl/7-fix-and-build.sh" ~/7-fix.sh; bash ~/7-fix.sh
+#   curl -fsSL https://raw.githubusercontent.com/zhaoxiancong/Fire-Emblem-Realm-in-Ashes/main/tools/7-fix-and-build.sh -o ~/7-fix.sh 2>/dev/null || cp "/mnt/d/workbuddy/FireEmblem Realm-in-Ashes/tools/7-fix-and-build.sh" ~/7-fix.sh; bash ~/7-fix.sh
 #
 # 或者更简单（已在 WSL 内、D 盘可见）：
-#   bash "/mnt/d/workbuddy/FireEmblem Realm-in-Ashes/tools/wsl/7-fix-and-build.sh"
+#   bash "/mnt/d/workbuddy/FireEmblem Realm-in-Ashes/tools/7-fix-and-build.sh"
 #
 # 作用：
 #   1. 查清 tools/gbagfx 到底是什么（子模块 / 普通目录 / 需生成）

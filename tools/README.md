@@ -84,18 +84,18 @@
 
 > 完整方法论见技能 `mgba-gdb-crash-debug`（含 `.cmd` 启动器的两个必踩坑）。
 
-### ⑦ ⚠️ 冗余：与根级同名的副本
+### ⑦ ✅ 已清理：与根级同名的副本（2026-09-25）
 
-`wsl/` 下的这 5 个文件与根级**内容完全相同（逐字节）**：
+`wsl/` 下曾有 5 个与根级**逐字节相同**的副本
+（`2-setup-project.sh` / `3-verify-env.sh` / `6-diagnose-build.sh` / `7-fix-and-build.sh` / `shanhe.sh`）。
 
-```
-tools/2-setup-project.sh      tools/3-verify-env.sh      tools/6-diagnose-build.sh
-tools/7-fix-and-build.sh      tools/shanhe.sh
-```
+**已删除**，并同步更新全部 8 处引用（`docs/5` ×3、`tools/7-fix-and-build.sh` 注释 ×3、
+`tools/shanhe.sh` 注释、`docs/6`/`README.md` 结构图）。
+**⇒ 现在 `tools/wsl/` 只放"必须在 WSL 内运行且根级没有同名"的工具。**
 
-**现状**：历史原因留下的副本（早期 WSL 侧需要一份）。
-**建议**：**保留根级，删除 `wsl/` 下的同名副本**（减少"改了一份忘另一份"的风险）。
-⚠️ **需先确认没有脚本按 `tools/wsl/2-setup-project.sh` 这样的路径调用它们**，确认后再删。
+> **为什么不保留副本**：副本的存在理由是"`/mnt/d` 路径含中文+空格、`cp` 容易失败"——
+> 但 `tools/wsl/` 路径**同样含中文+空格**，理由不成立；
+> 正确做法是**用双引号包住源路径**，而不是维护两份。
 
 ---
 

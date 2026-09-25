@@ -7,7 +7,7 @@
 #   bash ~/shanhe.sh
 #
 # 首次使用（从 GitHub 拉取，WSL 内任意目录可用）：
-#   curl -fsSL https://raw.githubusercontent.com/zhaoxiancong/Fire-Emblem-Realm-in-Ashes/main/tools/wsl/shanhe.sh -o ~/shanhe.sh && bash ~/shanhe.sh
+#   curl -fsSL https://raw.githubusercontent.com/zhaoxiancong/Fire-Emblem-Realm-in-Ashes/main/tools/shanhe.sh -o ~/shanhe.sh && bash ~/shanhe.sh
 #
 # 环境变量可覆盖：
 #   FRAMEWORK_DIR=/path  CLASH_PORT=7897  SKIP_BUILD=1  AUTO=1  bash ~/shanhe.sh
