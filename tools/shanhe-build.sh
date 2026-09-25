@@ -383,16 +383,32 @@ else:
             if cand in rec: return cand
         return None
     applied = 0
-    for entry in patch.get(lk, []):
-        k = key_of(entry)
-        if k is None:
-            die(f"补丁条目无可用定位键（试过 character/class/item/support/id/name/symbol）")
-        found = False
-        for i, rec in enumerate(lst):
-            if rec.get(k) == entry[k]:
-                lst[i] = copy.deepcopy(entry); applied += 1; found = True; break
-        if not found:
-            lst.append(copy.deepcopy(entry)); applied += 1
+    # ── 显式声明的「整表替换」表 ──
+    # 适用：**无标识键的纯规则表**（如 weapontriangle 的 rules —— 每项只有
+    #       attacker/defender/hitBonus/atkBonus，没有可定位的键）。
+    #       这类表无法「按条匹配」，只能整体覆盖；因此**必须显式列出**，
+    #       以免把"定位键写错"静默当成整表替换。
+    WHOLE_TABLE_REPLACE = ("weapontriangle.json",)
+    if name in WHOLE_TABLE_REPLACE:
+        new_list = patch.get(lk)
+        if not isinstance(new_list, list) or not new_list:
+            die(f"{name}：整表替换要求补丁含非空数组字段 '{lk}'")
+        print(f"  \033[0;32m✓\033[0m [merge] {name} 【整表替换】字段 '{lk}'：{len(lst)} 条 → {len(new_list)} 条"
+              f"（显式声明；该表无标识键，不按键匹配）")
+        lst = copy.deepcopy(new_list)
+        applied = len(lst)
+    else:
+        for entry in patch.get(lk, []):
+            k = key_of(entry)
+            if k is None:
+                die(f"补丁条目无可用定位键（试过 character/class/item/support/id/name/symbol）；"
+                    f"若该表本就无标识键（纯规则表），请把 '{name}' 加入 WHOLE_TABLE_REPLACE 走整表替换")
+            found = False
+            for i, rec in enumerate(lst):
+                if rec.get(k) == entry[k]:
+                    lst[i] = copy.deepcopy(entry); applied += 1; found = True; break
+            if not found:
+                lst.append(copy.deepcopy(entry)); applied += 1
     base[lk] = lst
     print(f"  \033[0;32m✓\033[0m [merge] {name} 列表 '{lk}' 应用 {applied} 条")
     result = base
@@ -993,6 +1009,8 @@ else
         docs/game_locale_text_edits.md) ;;                        # ★ 预期（文本台账，见 3b'）
         fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
         src/events/*.h) ;;                                        # ★★ 预期（框架补丁：教学脚本 keep-wait，见 3c''）
+        src/bmbattle.c) ;;                                        # ★★ 预期（框架补丁：weapontriangle 参考块，见 3c''）
+        reports/*) ;;                                             # ★ 预期（generated-data 的 inventory/审计报告是 generate 的正常副产物）
         src/uimenu.c) ;;                                          # ★★ 预期（框架补丁：历史目标，见 3c''）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)

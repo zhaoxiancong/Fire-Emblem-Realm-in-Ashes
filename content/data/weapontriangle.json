@@ -1,0 +1,47 @@
+{
+  "$schema": "fe8.weapontriangle.v1",
+  "_comment": [
+    "《山河烬》武器相克表覆盖补丁（方案 B 内容外置）。",
+    "",
+    "为什么要覆盖：",
+    "  框架的 weapontriangle 是【纯数据驱动】—— src/data/weapontriangle.json",
+    "  → build/generated/data/data_weapontriangle.c → 编入 ROM。",
+    "  手写表（src/bmbattle.c:46-69）已被 GENERATED_DATA_WEAPONTRIANGLE_LINKED 排除。",
+    "  ⇒ 改相克 = 改本文件，**零 C 代码**。",
+    "",
+    "本设计的两个环（见 docs/3 §1.3）：",
+    "  · 兵刃三环（物理）：枪克刀、刀克锤、锤克枪；★神器不入环",
+    "  · 三才法环（魔法）：天克地、地克人、人克天",
+    "",
+    "映射依据 docs/9 §4.2（原创武器系 → 原版 ITYPE）：",
+    "  剑/刀/短刀 → ITYPE_SWORD ；锤 → ITYPE_AXE ；枪 → ITYPE_LANCE",
+    "  法器·天道 → ITYPE_ANIMA ；法器·地脉 → ITYPE_DARK ；法器·人和 → ITYPE_LIGHT",
+    "",
+    "⚠️ 本次只改【魔法环方向】。物理环经核对**与原版完全一致**（原版 SWORD克AXE / AXE克LANCE /",
+    "   LANCE克SWORD，映射后正是 刀克锤 / 锤克枪 / 枪克刀），故保持原样。",
+    "",
+    "⚠️ 已知设计缺口：原版物理类只有 3 个（SWORD/LANCE/AXE），而「剑」与「刀」都只能落 SWORD，",
+    "   故【剑不入三环】在引擎层无法表达 —— 剑会自动参与环。待拍板（见 docs/3 §2.1）。",
+    "",
+    "数值锚点：克制方 +15 命中 / +1 威力；被克方 −15 / −1（与原版一致，见 docs/3 §1.3）。"
+  ],
+  "rules": [
+    { "attacker": "ITYPE_SWORD", "defender": "ITYPE_LANCE", "hitBonus": -15, "atkBonus": -1 },
+    { "attacker": "ITYPE_SWORD", "defender": "ITYPE_AXE",   "hitBonus": 15,  "atkBonus": 1 },
+
+    { "attacker": "ITYPE_LANCE", "defender": "ITYPE_AXE",   "hitBonus": -15, "atkBonus": -1 },
+    { "attacker": "ITYPE_LANCE", "defender": "ITYPE_SWORD", "hitBonus": 15,  "atkBonus": 1 },
+
+    { "attacker": "ITYPE_AXE",   "defender": "ITYPE_SWORD", "hitBonus": -15, "atkBonus": -1 },
+    { "attacker": "ITYPE_AXE",   "defender": "ITYPE_LANCE", "hitBonus": 15,  "atkBonus": 1 },
+
+    { "attacker": "ITYPE_ANIMA", "defender": "ITYPE_DARK",  "hitBonus": 15,  "atkBonus": 1 },
+    { "attacker": "ITYPE_ANIMA", "defender": "ITYPE_LIGHT", "hitBonus": -15, "atkBonus": -1 },
+
+    { "attacker": "ITYPE_LIGHT", "defender": "ITYPE_ANIMA", "hitBonus": 15,  "atkBonus": 1 },
+    { "attacker": "ITYPE_LIGHT", "defender": "ITYPE_DARK",  "hitBonus": -15, "atkBonus": -1 },
+
+    { "attacker": "ITYPE_DARK",  "defender": "ITYPE_LIGHT", "hitBonus": 15,  "atkBonus": 1 },
+    { "attacker": "ITYPE_DARK",  "defender": "ITYPE_ANIMA", "hitBonus": -15, "atkBonus": -1 }
+  ]
+}

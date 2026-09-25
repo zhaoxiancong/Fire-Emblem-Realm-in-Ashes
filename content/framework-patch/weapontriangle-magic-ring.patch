@@ -1,0 +1,52 @@
+# 山河烬 框架补丁: weapontriangle-magic-ring
+#
+# 目标文件: src/bmbattle.c   (框架只读依赖 -> 以 unified diff 形式最小化覆写)
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么(6 行):
+#   src/bmbattle.c 里 `#if !GENERATED_DATA_WEAPONTRIANGLE_LINKED` 的【手写参考块】，
+#   其魔法环方向与原版一致（理克光、光克暗、暗克理）。
+#   《山河烬》的三才法环要求【反向】：天(理)克地(暗)、地(暗)克人(光)、人(光)克天(理)。
+#   ⇒ 6 行 +/- 互换。
+#
+# 为什么必须打这个补丁（而不是只改 JSON）:
+#   框架的 round-trip 校验要求「生成产物」与「手写参考块」逐字段一致。
+#   只改 src/data/weapontriangle.json 会在构建期报：
+#     values mismatch for ('ITYPE_ANIMA','ITYPE_DARK') ... FAILED: 6 diagnostic(s)
+#   而该参考块位于 `#if !GENERATED_DATA_WEAPONTRIANGLE_LINKED` 内，
+#   **不参与编译** —— 所以本补丁只改"参考副本"，对编译产物零影响，风险极低。
+#
+# ⚠️ 顺带记录一处框架内部矛盾（可提上游）：
+#   该块上方注释写着 "Never hand-edit this block -- edit src/data/weapontriangle.json
+#   and regenerate instead."，但 round-trip 又要求它与 JSON 同步 —— 两者互相冲突。
+#
+# 数据层真源: content/data/weapontriangle.json（整表替换，见 shanhe-build.sh 3a 的
+#             WHOLE_TABLE_REPLACE）。改相克时两份都要改、且必须一致。
+#
+# 上游若修复该矛盾，本补丁可删除。详见 docs/12 与 docs/6 §3.4g。
+#
+--- a/src/bmbattle.c
++++ b/src/bmbattle.c
+@@ -56,14 +56,14 @@
+     { ITYPE_AXE,   ITYPE_SWORD, -15, -1 },
+     { ITYPE_AXE,   ITYPE_LANCE, +15, +1 },
+ 
+-    { ITYPE_ANIMA, ITYPE_DARK,  -15, -1 },
+-    { ITYPE_ANIMA, ITYPE_LIGHT, +15, +1 },
+-
+-    { ITYPE_LIGHT, ITYPE_ANIMA, -15, -1 },
+-    { ITYPE_LIGHT, ITYPE_DARK,  +15, +1 },
+-
+-    { ITYPE_DARK,  ITYPE_LIGHT, -15, -1 },
+-    { ITYPE_DARK,  ITYPE_ANIMA, +15, +1 },
++    { ITYPE_ANIMA, ITYPE_DARK,  +15, +1 },
++    { ITYPE_ANIMA, ITYPE_LIGHT, -15, -1 },
++
++    { ITYPE_LIGHT, ITYPE_ANIMA, +15, +1 },
++    { ITYPE_LIGHT, ITYPE_DARK,  -15, -1 },
++
++    { ITYPE_DARK,  ITYPE_LIGHT, +15, +1 },
++    { ITYPE_DARK,  ITYPE_ANIMA, -15, -1 },
+ 
+     { -1 },
+ };
