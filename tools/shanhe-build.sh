@@ -499,8 +499,16 @@ if [ "$DRY_RUN" != "1" ] && [ "$MERGED_COUNT" -gt 0 ] && [ -d "$FRAMEWORK_DIR/sc
 fi
 
 # ── 3b. texts/ 合并 ──
-if [ -d "$CONTENT_DIR/texts" ] && [ -n "$(find "$CONTENT_DIR/texts" -type f -not -name '.gitkeep' 2>/dev/null)" ]; then
+#
+# ★ indexed_overrides.*.json 不入 3b 的文件级拷贝 —— 它们是**补丁**，由 3b' 走
+#   「合并进框架 indexed_overrides.json → regenerate 重生成 indexed.txt」的通道。
+#   直接 cp 会覆盖框架自带的 156 条官方覆盖。
+# ⚠️ 仓库路径含空格（FireEmblem Realm-in-Ashes）→ 文件清单一律用
+#    `while IFS= read -r` 逐行读，**不能**裸 `for x in $(find …)`（会被词分割）。
+TEXT_OVERRIDE_PATCHES="$(find "$CONTENT_DIR/texts" -type f -name 'indexed_overrides.*.json' 2>/dev/null)"
+if [ -d "$CONTENT_DIR/texts" ] && [ -n "$(find "$CONTENT_DIR/texts" -type f -not -name '.gitkeep' -not -name 'indexed_overrides.*.json' 2>/dev/null)" ]; then
   while IFS= read -r rel; do
+    case "$rel" in indexed_overrides.*.json) continue ;; esac
     src="$CONTENT_DIR/texts/$rel"; dst="$FRAMEWORK_DIR/texts/$rel"
     if [ "$DRY_RUN" = "1" ]; then
       act "[预演] 铺设 texts/$rel → texts/$rel"
@@ -510,9 +518,175 @@ if [ -d "$CONTENT_DIR/texts" ] && [ -n "$(find "$CONTENT_DIR/texts" -type f -not
       act "[copy] texts/$rel"
     fi
     MERGED_COUNT=$((MERGED_COUNT+1))
-  done < <(cd "$CONTENT_DIR/texts" && find . -type f -not -name '.gitkeep' | sed 's|^\./||')
+  done < <(cd "$CONTENT_DIR/texts" && find . -type f -not -name '.gitkeep' -not -name 'indexed_overrides.*.json' | sed 's|^\./||')
 else
-  dim "content/texts/ 为空 —— 无原创文本可铺设（M1 阶段正常）"
+  dim "content/texts/ 无整体铺设文件（M1 阶段正常）"
+fi
+
+# ── 3b'. 中文文本覆盖补丁（indexed_overrides）──
+#
+# 背景（见 docs/6 §3.4d）：框架的 texts/locales/zh-Hans/indexed.txt **不是手写的**，
+# 而是由 importer 从 pinned 原始快照 + texts/locales/indexed_overrides.json 生成的。
+# 因此原创中文文本的正确姿势**不是**改 indexed.txt（会被下次 regenerate 冲掉），
+# 而是：把补丁合并进框架的 indexed_overrides.json → 跑 regenerate 重生成。
+#
+#   content/texts/locales/indexed_overrides.zh-Hans.json   ← 你写这个（补丁）
+#      ↓ 合并（按 source_key）
+#   框架 texts/locales/indexed_overrides.json              ← 156 条官方 + 你的
+#      ↓ python3 -m scripts.localization.game_locales regenerate
+#   框架 texts/locales/zh-Hans/indexed.txt                 ← 重生成，含你的文本
+#      ↓ python3 -m scripts.localization.game_locales.text_edit_ledger generate
+#   框架 texts/locales/mapping/game_locale_text_edits.json ← 台账（改动必须有 provenance）
+#
+# 定位键 = FE8J source index（#0xNNNN），非 FE8U target id。
+# ⚠️ 路径含空格 → 用 `while IFS= read -r` 逐行读，禁用裸 `for x in $VAR`。
+if [ -n "$TEXT_OVERRIDE_PATCHES" ]; then
+  TEXT_OVR_N=0
+  while IFS= read -r patch; do
+    [ -n "$patch" ] || continue
+    [ -f "$patch" ] || continue
+    name="$(basename "$patch")"
+    if [ "$DRY_RUN" = "1" ]; then
+      act "[预演] 合并文本覆盖补丁 $name → texts/locales/indexed_overrides.json"
+      TEXT_OVR_N=$((TEXT_OVR_N+1)); MERGED_COUNT=$((MERGED_COUNT+1))
+      continue
+    fi
+    if python3 - "$patch" "$FRAMEWORK_DIR" <<'PY' >> "$REPORT" 2>&1
+import json, sys, os
+patch_path, fw = sys.argv[1], sys.argv[2]
+patch = json.load(open(patch_path, encoding="utf-8"))
+dst = os.path.join(fw, "texts/locales/indexed_overrides.json")
+base = json.load(open(dst, encoding="utf-8"))
+sk = patch.get("source_key", "fe8cn_source")
+if sk not in base.get("sources", {}):
+    print(f"  framework overrides missing sources.{sk}"); sys.exit(2)
+entries = base["sources"][sk]["entries"]
+n = 0
+for sid, rec in patch.get("overrides", {}).items():
+    key = "0x%04X" % int(sid, 16)
+    missing = [k for k in ("expected_text", "provenance", "reason", "replacement_text") if k not in rec]
+    if missing:
+        print(f"  override {sid} missing fields: {missing}"); sys.exit(2)
+    entries[key] = {k: rec[k] for k in ("expected_text", "provenance", "reason", "replacement_text")}
+    n += 1
+with open(dst, "w", encoding="utf-8") as f:
+    json.dump(base, f, ensure_ascii=False, indent=2)
+print(f"  merged {n} overrides from {os.path.basename(patch_path)}")
+PY
+    then
+      ok "[文本] $name 合并入 indexed_overrides.json"
+      TEXT_OVR_N=$((TEXT_OVR_N+1)); MERGED_COUNT=$((MERGED_COUNT+1))
+    else
+      bad "[文本] $name 合并失败"; tail -10 "$REPORT" | sed 's/^/      /'
+      die "[文本] 覆盖补丁合并失败"
+    fi
+  done < <(printf '%s\n' "$TEXT_OVERRIDE_PATCHES")
+
+  if [ "$TEXT_OVR_N" -gt 0 ] && [ "$DRY_RUN" != "1" ]; then
+    # regenerate：从 pinned 快照 + overrides 重生成 indexed.txt / manifest
+    if ( cd "$FRAMEWORK_DIR" && python3 -m scripts.localization.game_locales regenerate ) >> "$REPORT" 2>&1; then
+      ok "[文本] regenerate 重生成 indexed.txt 完成"
+    else
+      bad "[文本] regenerate 失败"; tail -15 "$REPORT" | sed 's/^/      /'
+      die "[文本] regenerate 失败（覆盖补丁格式或 source index 有误）"
+    fi
+    # ledger generate：刷新「文本改动台账」（改动必须有 provenance）
+    if ( cd "$FRAMEWORK_DIR" && python3 -m scripts.localization.game_locales.text_edit_ledger generate ) >> "$REPORT" 2>&1; then
+      ok "[文本] text-edit 台账已刷新"
+    else
+      bad "[文本] text-edit 台账生成失败（多为「改了文本但缺 provenance」）"
+      tail -15 "$REPORT" | sed 's/^/      /'
+      die "[文本] 台账生成失败 —— 给每条覆盖补 provenance（audit/context/target_ids）"
+    fi
+  fi
+else
+  dim "content/texts/ 无 indexed_overrides 补丁 —— 跳过中文文本覆盖（正常）"
+fi
+
+# ── 3b''. ROM 消息表覆盖补丁（msg_overrides）──
+# ⚠️ 关键：框架有两条文本通道，别混：
+#     (A) texts/locales/<locale>/indexed.txt —— 审计/宽度/台账（3b' 处理）
+#     (B) texts/texts.txt                    —— 【真正编译进 ROM 的消息表】
+#         （Makefile:562 → src/msg_data.c → src/msg_data.o）
+#   只做 (A) 会出现「审计全绿但 ROM 里仍是英文」。本步补 (B)。
+#   定位键 = FE8U target id（texts.txt 的 ## MSG_<HEX>）。
+MSG_OVERRIDE_PATCHES="$(find "$CONTENT_DIR/texts" -type f -name 'msg_overrides.*.json' 2>/dev/null)"
+if [ -n "$MSG_OVERRIDE_PATCHES" ]; then
+  MSG_OVR_N=0
+  while IFS= read -r patch; do
+    [ -z "$patch" ] && continue
+    [ -f "$patch" ] || continue
+    MSG_OVR_N=$((MSG_OVR_N+1))
+    if [ "$DRY_RUN" = "1" ]; then
+      act "[预演] 合并 ROM 消息表补丁：$(basename "$patch") → texts/texts.txt"
+    else
+      if python3 - "$patch" "$FRAMEWORK_DIR/texts/texts.txt" "$DRY_RUN" <<'PYMSG' >> "$REPORT" 2>&1
+import json, re, sys
+patch_path, target_path = sys.argv[1], sys.argv[2]
+with open(patch_path, encoding="utf-8") as f:
+    patch = json.load(f)
+msgs = patch.get("messages") or {}
+if not msgs:
+    print("msg_overrides: 无 messages，跳过"); sys.exit(0)
+with open(target_path, encoding="utf-8") as f:
+    lines = f.read().split("\n")
+
+# 建索引：## MSG_<HEX> → 其后正文行区间 [start, end)
+idx = {}
+i = 0
+while i < len(lines):
+    m = re.match(r"^## MSG_([0-9A-Fa-f]+)\s*$", lines[i])
+    if m:
+        key = int(m.group(1), 16)
+        j = i + 1
+        while j < len(lines) and not lines[j].startswith("## MSG_") and not lines[j].startswith("#0x"):
+            j += 1
+        idx[key] = (i, j)
+    i += 1
+
+applied = 0
+# ⚠️ 必须倒序处理：替换会改变行数，正序会让后续索引错位（实测 ## MSG_26E 取到下一段）
+for hexkey in sorted(msgs.keys(), key=lambda k: int(k, 16), reverse=True):
+    rec = msgs[hexkey]
+    key = int(hexkey, 16)
+    if key not in idx:
+        print(f"msg_overrides: ## MSG_{hexkey[2:].upper()} 不存在，跳过")
+        continue
+    start, end = idx[key]
+    # 正文 = start+1 .. end，去掉尾部空行
+    body = lines[start+1:end]
+    while body and body[-1].strip() == "":
+        body.pop()
+    current = "\n".join(body)
+    exp = rec.get("expected_text")
+    if exp is not None and current != exp:
+        print(f"msg_overrides: ## MSG_{hexkey[2:].upper()} 期望与实际不符")
+        print(f"  期望: {exp!r}")
+        print(f"  实际: {current!r}")
+        sys.exit(2)
+    new_text = rec["replacement_text"]
+    # 保留原有尾随空行结构，避免改变区块分隔
+    tail = lines[start+1+len(body):end]
+    lines[start+1:end] = new_text.split("\n") + tail
+    applied += 1
+    print(f"msg_overrides: ## MSG_{hexkey[2:].upper()} 已覆盖")
+
+with open(target_path, "w", encoding="utf-8") as f:
+    f.write("\n".join(lines))
+print(f"msg_overrides: 共 {applied} 条")
+PYMSG
+      then
+        ok "[消息表] $(basename "$patch") 已合并进 texts/texts.txt"
+      else
+        bad "[消息表] 合并失败：$(basename "$patch")"
+        tail -20 "$REPORT" | sed 's/^/      /'
+        die "[消息表] texts.txt 覆盖失败（expected_text 不符或 target id 有误）"
+      fi
+    fi
+  done < <(printf '%s\n' "$MSG_OVERRIDE_PATCHES")
+  [ "$DRY_RUN" = "1" ] && [ "$MSG_OVR_N" -gt 0 ] && dim "共 $MSG_OVR_N 个消息表补丁待合并"
+else
+  dim "content/texts/ 无 msg_overrides 补丁 —— ROM 消息表保持上游原文"
 fi
 
 # ── 3c. src/*.c 铺为 src/shanhe_*.c ──
@@ -552,6 +726,30 @@ if [ -d "$CONTENT_DIR/src" ] && [ -n "$(ls -A "$CONTENT_DIR/src" 2>/dev/null | g
   fi
 else
   dim "content/src/ 为空 —— 无原创 C 代码可铺设（M1 阶段正常）"
+fi
+
+# ── 3c'. 字库补丁铺设（原创汉字的 CJK 字库扩展）──
+# 背景：框架 CJK 字库 = 「冻结全联合基线」+ FEHRR 源优先覆盖，二者均不含项目新造字。
+#       框架无「新增字」官方入口 → 本项目走「扩冻结基线」路线，产物以单个归档纳管。
+#       归档内容（26 项）：
+#         fonts/cjk/febuilder-baseline/*      —— 扩增后的冻结基线（含新字真字形）
+#         fonts/cjk/corpora/ maps/ *.json     —— 重算后的语料/映射/清单/报告
+#         graphics/fonts/cjk/zh-Hans.*        —— 运行时字库（FEHRR 覆盖后）
+#       归档由 tools/wsl/_run_font_pipeline.sh 六步流程产出，可逐字节复现。
+FONT_PATCH="$(find "$CONTENT_DIR/fonts" -maxdepth 1 -type f -name '*.tar.gz' 2>/dev/null | head -1)"
+if [ -n "$FONT_PATCH" ]; then
+  if [ "$DRY_RUN" = "1" ]; then
+    act "[预演] 解包字库补丁 → 框架：$(basename "$FONT_PATCH")"
+  else
+    if tar xzf "$FONT_PATCH" -C "$FRAMEWORK_DIR" 2>/dev/null; then
+      FONT_N="$(tar tzf "$FONT_PATCH" 2>/dev/null | grep -c . || echo 0)"
+      ok "字库补丁已铺设：$FONT_N 项（$(basename "$FONT_PATCH")）"
+    else
+      bad "字库补丁解包失败：$FONT_PATCH"
+    fi
+  fi
+else
+  dim "content/fonts/ 无字库补丁 —— 沿用框架上游字库"
 fi
 
 # ── 3d. assets 提示 ──
@@ -720,6 +918,8 @@ else
       case "$path" in
         src/data/*|texts/*|src/shanhe_*.c|Makefile) ;;            # 预期（脚本铺设目标）
         src/data_characters.c|src/data_classes.c|src/data_items.c|src/data_supports.c) ;;  # ★ 预期（B' 回填目标，见 3a'）
+        docs/game_locale_text_edits.md) ;;                        # ★ 预期（文本台账，见 3b'）
+        fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)
           printf "  %s⚠ 预期外改动：%s%s\n" "$c_yellow" "$path" "$c_off"
@@ -729,7 +929,7 @@ else
     done < "$CUR"
 
     if [ "$UNEXPECTED" -eq 0 ]; then
-      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、src/shanhe_*.c、Makefile、build/）"
+      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/shanhe_*.c、Makefile、build/）"
     else
       warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
       dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"

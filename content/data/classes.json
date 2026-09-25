@@ -1,0 +1,68 @@
+{
+  "$schema": "fe8.classes.v1",
+  "classes": [
+    {
+      "class": "CLASS_EIRIKA_LORD",
+      "nameTextId": 703,
+      "descTextId": 778,
+      "promotion": "CLASS_EIRIKA_MASTER_LORD",
+      "smsId": 1,
+      "sortOrder": 1,
+      "defaultPortraitId": 139,
+      "base": {
+        "hp": 16,
+        "pow": 4,
+        "skl": 5,
+        "spd": 6,
+        "def": 3,
+        "res": 0,
+        "con": 7,
+        "mov": 5
+      },
+      "max": {
+        "hp": 60,
+        "pow": 20,
+        "skl": 20,
+        "spd": 20,
+        "def": 20,
+        "res": 20,
+        "con": 20
+      },
+      "classRelativePower": 3,
+      "growth": {
+        "hp": 10,
+        "pow": 5,
+        "skl": 5,
+        "spd": 5,
+        "def": 0,
+        "res": 0,
+        "lck": 0
+      },
+      "promotionGain": {
+        "hp": 0,
+        "pow": 0,
+        "skl": 0,
+        "spd": 0,
+        "def": 0,
+        "res": 0
+      },
+      "attributes": [
+        "CA_LORD",
+        "CA_LOCK_2",
+        "CA_LOCK_4"
+      ],
+      "baseRanks": {
+        "ITYPE_SWORD": "WPN_EXP_E"
+      },
+      "battleAnim": "AnimConf_1",
+      "movCostTable": [
+        "TerrainTable_MovCost_CommonT2Normal",
+        "TerrainTable_MovCost_CommonT2Rain",
+        "TerrainTable_MovCost_CommonT2Snow"
+      ],
+      "terrainAvoid": "TerrainTable_Avo_Common",
+      "terrainDefense": "TerrainTable_Def_Common",
+      "terrainResistance": "TerrainTable_Res_Common"
+    }
+  ]
+}

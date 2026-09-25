@@ -1,0 +1,67 @@
+{
+  "$schema": "shanhe.text-overrides.v1",
+  "_comment": [
+    "《山河烬》中文文本覆盖补丁（方案 B 内容外置）。",
+    "本文件由 tools/shanhe-build.sh 第 3b' 步合并进框架的",
+    "texts/locales/indexed_overrides.json，再跑 framework 的 regenerate，",
+    "把 texts/locales/zh-Hans/indexed.txt 重新生成为含原创文本的版本。",
+    "",
+    "定位键 = FE8J source index（框架 zh-Hans/indexed.txt 的 #0xNNNN），",
+    "不是 FE8U target id。映射关系见 texts/locales/mapping/fe8u_target_map.json。",
+    "",
+    "每条必须带 provenance（audit/context/target_ids）与 reason ——",
+    "framework 的 text_edit_ledger check 会校验「改动必须有已审阅的来源」。"
+  ],
+  "locale": "zh-Hans",
+  "source_key": "fe8cn_source",
+  "overrides": {
+    "0x0199": {
+      "expected_text": "艾瑞珂",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CHARACTER_EIRIKA.nameTextId（FE8U 目标 0x0212）—— 《山河烬》原创主角虞聪复用原版艾瑞珂角色槽位",
+        "target_ids": [
+          "0x0212"
+        ]
+      },
+      "reason": "原创主角虞聪顶替原版艾瑞珂槽位，显示名随之改为虞聪（数值来源见 docs/3 §4.2）。",
+      "replacement_text": "虞聪"
+    },
+    "0x01F5": {
+      "expected_text": "心地善良，气质高雅的[CTRL:0001]鲁内斯公主",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CHARACTER_EIRIKA.descTextId（FE8U 目标 0x026E）—— 虞聪角色说明",
+        "target_ids": [
+          "0x026E"
+        ]
+      },
+      "reason": "把原版艾瑞珂的角色说明替换为虞聪设定（docs/1 §2.1：守鼎世家虞家次子，耳聪天赋）。",
+      "replacement_text": "守鼎世家虞家次子，[CTRL:0001]温和执拗，耳能听鼎鸣"
+    },
+    "0x0246": {
+      "expected_text": "领主",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CLASS_EIRIKA_LORD.nameTextId（FE8U 目标 0x02BF）—— 原创职业「佩剑郎」",
+        "target_ids": [
+          "0x02BF"
+        ]
+      },
+      "reason": "原创职业佩剑郎复用原版艾瑞珂领主职业槽位，职业名随之改为佩剑郎（数值来源见 docs/3 §5.1）。",
+      "replacement_text": "佩剑郎"
+    },
+    "0x0291": {
+      "expected_text": "治理领地的君主后裔[CTRL:0001]还很年轻，未成大器",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CLASS_EIRIKA_LORD.descTextId（FE8U 目标 0x030A）—— 佩剑郎职业说明",
+        "target_ids": [
+          "0x030A"
+        ]
+      },
+      "reason": "把原版领主职业说明替换为佩剑郎设定（docs/1 §4：剑系低阶，持剑守鼎的少年）。",
+      "replacement_text": "持剑守鼎的少年，[CTRL:0001]均衡而灵动"
+    }
+  }
+}

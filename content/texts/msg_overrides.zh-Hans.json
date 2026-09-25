@@ -1,0 +1,67 @@
+{
+  "$schema": "shanhe.msg-overrides.v1",
+  "_comment": [
+    "《山河烬》ROM 消息表覆盖补丁（方案 B 内容外置）—— 【真正进 ROM 的一层】。",
+    "",
+    "为什么要单独有这个文件：",
+    "  框架有两条文本通道，作用完全不同：",
+    "    (A) texts/locales/<locale>/indexed.txt —— 本地化审计/宽度校验/台账。",
+    "        由 3b' 步的 indexed_overrides 驱动，进 catalog 与报告，但不进 ROM。",
+    "    (B) texts/texts.txt —— 真正被 Makefile 编译进 ROM 的消息表",
+    "        （Makefile:562 src/msg_data.c ← $(TEXT_PROCESS) texts/texts.txt ...）。",
+    "  只做 (A) 会让审计全绿、ROM 里却还是英文 —— 本文件补上 (B)。",
+    "",
+    "定位键 = FE8U target id（即 texts.txt 的 ## MSG_<HEX> 编号），",
+    "与 indexed_overrides 的 FE8J source index 不同，两套坐标不可混用。",
+    "映射：0x0199→0x0212、0x01F5→0x026E、0x0246→0x02BF、0x0291→0x030A。",
+    "",
+    "控制码用 texts.txt 的方言：",
+    "  [LF]   换行（原版描述文本用这个）",
+    "  [X]    消息终止符（每条消息必须有）",
+    "  [.]    短暂停顿（承接原文节奏）",
+    "不要写 [CTRL:0001]（那是 indexed.txt 方言，编译进 ROM 会被当字面量）。"
+  ],
+  "locale": "zh-Hans",
+  "messages": {
+    "0x0212": {
+      "expected_text": "Eirika[X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CHARACTER_EIRIKA.nameTextId（texts.txt:## MSG_212）—— 原创主角虞聪复用原版艾瑞珂槽位",
+        "source_key": "0x0199"
+      },
+      "reason": "原创主角虞聪顶替原版艾瑞珂槽位，ROM 内显示名改为虞聪（数值来源见 docs/3 §4.2）。",
+      "replacement_text": "虞聪[X]"
+    },
+    "0x026E": {
+      "expected_text": "The princess of the kingdom of[LF]\nRenais. She's elegant and kind.[.][X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CHARACTER_EIRIKA.descTextId（texts.txt:## MSG_26E）—— 虞聪角色说明",
+        "source_key": "0x01F5"
+      },
+      "reason": "把原版艾瑞珂的角色说明替换为虞聪设定（docs/1 §2.1：守鼎世家虞家次子，耳聪天赋）。",
+      "replacement_text": "守鼎世家虞家次子，[LF]温和执拗，耳能听鼎鸣[.][X]"
+    },
+    "0x02BF": {
+      "expected_text": "Lord[X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CLASS_EIRIKA_LORD.nameTextId（texts.txt:## MSG_2BF）—— 原创职业「佩剑郎」",
+        "source_key": "0x0246"
+      },
+      "reason": "原创职业佩剑郎复用原版艾瑞珂领主职业槽位，职业名随之改为佩剑郎（数值来源见 docs/3 §5.1）。",
+      "replacement_text": "佩剑郎[X]"
+    },
+    "0x030A": {
+      "expected_text": "Noble heirs to a ruling house.[LF]\nThey possess great potential.[.][X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-25",
+        "context": "CLASS_EIRIKA_LORD.descTextId（texts.txt:## MSG_30A）—— 佩剑郎职业说明",
+        "source_key": "0x0291"
+      },
+      "reason": "把原版领主职业说明替换为佩剑郎设定（docs/1 §4：剑系低阶，持剑守鼎的少年）。",
+      "replacement_text": "持剑守鼎的少年，[LF]均衡而灵动[.][X]"
+    }
+  }
+}

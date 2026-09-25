@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 620" font-family="'Segoe UI','Microsoft YaHei',sans-serif">
+  <title>原创汉字与文本进入 ROM 的两条通道</title>
+  <desc>说明《山河烬》里原创汉字（字库通道）与原创文本（消息表通道）分别如何从 content/ 铺设到框架、经 FEBuilder 渲染与 Huffman 压缩，最终进入 GBA ROM；并标出各自的验证手段。</desc>
+
+  <rect width="760" height="620" fill="#F7F8FA" rx="8"/>
+  <text x="24" y="34" font-size="17" font-weight="700" fill="#1A1D24">原创内容进 ROM 的两条通道</text>
+  <text x="24" y="54" font-size="11.5" fill="#6B7280">字库补丁管「字形」，消息表补丁管「文字」—— 两者独立，合起来才能让屏幕出现原创汉字</text>
+
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#3B82F6"/>
+    </marker>
+    <marker id="arG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#10B981"/>
+    </marker>
+  </defs>
+
+  <!-- 通道 A：字库 -->
+  <rect x="24" y="76" width="340" height="248" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5" rx="8"/>
+  <text x="194" y="100" font-size="13" font-weight="700" fill="#1E40AF" text-anchor="middle">通道 A · 字形</text>
+  <text x="194" y="118" font-size="10" fill="#3B82F6" text-anchor="middle">缺字 → 屏幕上出现空白/豆腐块</text>
+
+  <rect x="40" y="132" width="308" height="34" fill="#FFFFFF" rx="4"/>
+  <text x="194" y="147" font-size="10.5" fill="#1F2937" text-anchor="middle">① 破环：往运行字库插占位字形</text>
+  <text x="194" y="160" font-size="9" fill="#6B7280" text-anchor="middle">_inject_glyphs.py（宽 16 / 位图清零）</text>
+
+  <path d="M 194 166 L 194 186" stroke="#3B82F6" stroke-width="2" marker-end="url(#arB)"/>
+
+  <rect x="40" y="188" width="308" height="34" fill="#FFFFFF" rx="4"/>
+  <text x="194" y="203" font-size="10.5" fill="#1F2937" text-anchor="middle">② FEBuilderGBA 渲染真字形</text>
+  <text x="194" y="216" font-size="9" fill="#6B7280" text-anchor="middle">--build-font-library --mode=generate</text>
+
+  <path d="M 194 222 L 194 242" stroke="#3B82F6" stroke-width="2" marker-end="url(#arB)"/>
+
+  <rect x="40" y="244" width="308" height="34" fill="#FFFFFF" rx="4"/>
+  <text x="194" y="259" font-size="10.5" fill="#1F2937" text-anchor="middle">③ 扩冻结基线 + FEHRR 覆盖</text>
+  <text x="194" y="272" font-size="9" fill="#6B7280" text-anchor="middle">_promote_baseline.py → split-runtime-corpora</text>
+
+  <path d="M 194 278 L 194 298" stroke="#3B82F6" stroke-width="2" marker-end="url(#arB)"/>
+
+  <rect x="40" y="300" width="308" height="16" fill="#DBEAFE" rx="3"/>
+  <text x="194" y="312" font-size="9.5" fill="#1E40AF" text-anchor="middle">content/fonts/shanhe-font-patch.tar.gz（26 项）</text>
+
+  <!-- 通道 B：消息表 -->
+  <rect x="396" y="76" width="340" height="248" fill="#F0FDF4" stroke="#10B981" stroke-width="1.5" rx="8"/>
+  <text x="566" y="100" font-size="13" font-weight="700" fill="#065F46" text-anchor="middle">通道 B · 文字</text>
+  <text x="566" y="118" font-size="10" fill="#10B981" text-anchor="middle">有条目 → ROM 里仍是英文原文</text>
+
+  <rect x="412" y="132" width="308" height="34" fill="#FFFFFF" rx="4"/>
+  <text x="566" y="147" font-size="10.5" fill="#1F2937" text-anchor="middle">① 定位：FE8U target id（## MSG_&lt;HEX&gt;）</text>
+  <text x="566" y="160" font-size="9" fill="#6B7280" text-anchor="middle">由 FE8J source index 映射而来</text>
+
+  <path d="M 566 166 L 566 186" stroke="#10B981" stroke-width="2" marker-end="url(#arG)"/>
+
+  <rect x="412" y="188" width="308" height="34" fill="#FFFFFF" rx="4"/>
+  <text x="566" y="203" font-size="10.5" fill="#1F2937" text-anchor="middle">② 期望值核对（防写错槽位）</text>
+  <text x="566" y="216" font-size="9" fill="#6B7280" text-anchor="middle">expected_text 必须与 texts.txt 逐字符一致</text>
+
+  <path d="M 566 222 L 566 242" stroke="#10B981" stroke-width="2" marker-end="url(#arG)"/>
+
+  <rect x="412" y="244" width="308" height="34" fill="#FFFFFF" rx="4"/>
+  <text x="566" y="259" font-size="10.5" fill="#1F2937" text-anchor="middle">③ 替换（倒序处理，防索引错位）</text>
+  <text x="566" y="272" font-size="9" fill="#6B7280" text-anchor="middle">控制码用 texts.txt 方言：[LF] [.] [X]</text>
+
+  <path d="M 566 278 L 566 298" stroke="#10B981" stroke-width="2" marker-end="url(#arG)"/>
+
+  <rect x="412" y="300" width="308" height="16" fill="#D1FAE5" rx="3"/>
+  <text x="566" y="312" font-size="9.5" fill="#065F46" text-anchor="middle">content/texts/msg_overrides.zh-Hans.json</text>
+
+  <!-- 汇合 -->
+  <path d="M 194 316 L 194 346 L 380 346" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <path d="M 566 316 L 566 346 L 420 346" stroke="#9CA3AF" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+
+  <rect x="200" y="356" width="360" height="50" fill="#FFFFFF" stroke="#6B7280" stroke-width="1.5" rx="8"/>
+  <text x="380" y="376" font-size="11.5" font-weight="700" fill="#1F2937" text-anchor="middle">tools/shanhe-build.sh（方案 B 唯一入口）</text>
+  <text x="380" y="394" font-size="9.5" fill="#6B7280" text-anchor="middle">3c' 字库补丁铺设 · 3b'' 消息表合并 · 3c src/*.c</text>
+
+  <path d="M 380 406 L 380 428" stroke="#9CA3AF" stroke-width="2" marker-end="url(#ar)"/>
+
+  <rect x="200" y="430" width="360" height="42" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.5" rx="8"/>
+  <text x="380" y="450" font-size="11" font-weight="700" fill="#92400E" text-anchor="middle">make all（框架内编译）</text>
+  <text x="380" y="465" font-size="9.5" fill="#B45309" text-anchor="middle">texts.txt → Huffman 压缩 → src/msg_data.c</text>
+
+  <path d="M 380 472 L 380 494" stroke="#9CA3AF" stroke-width="2" marker-end="url(#ar)"/>
+
+  <rect x="230" y="496" width="300" height="42" fill="#EDE9FE" stroke="#8B5CF6" stroke-width="1.5" rx="8"/>
+  <text x="380" y="516" font-size="11.5" font-weight="700" fill="#5B21B6" text-anchor="middle">fireemblem8.gba（32M 中文版）</text>
+  <text x="380" y="531" font-size="9.5" fill="#7C3AED" text-anchor="middle">字形（位图）+ 文字（压缩对照表）各自落位</text>
+
+  <!-- 验证 -->
+  <rect x="24" y="556" width="712" height="48" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1" rx="8"/>
+  <text x="44" y="574" font-size="10.5" font-weight="700" fill="#374151">怎么验证真的进去了（ROM 里文本是 Huffman 压缩的，搜明文搜不到 ≠ 没生效）：</text>
+  <text x="44" y="592" font-size="9.5" fill="#6B7280">字库：ELF 符号表量字形数 · _find_glyphs_in_shots.py 模板匹配截图 · ROM 字节命中压缩字节指纹</text>
+  <text x="44" y="606" font-size="9.5" fill="#6B7280">文本：_verify_msg_rom.py 用同一套 huffman.py 复算码表 → 解压 CompressedText_MSG_xxx → 与期望中文比对</text>
+</svg>
