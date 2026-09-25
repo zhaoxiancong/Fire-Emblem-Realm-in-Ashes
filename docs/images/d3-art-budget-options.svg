@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 500" font-family="'Segoe UI','Microsoft YaHei',sans-serif">
+  <title>D-3 美术预算重心：三方案对照与推荐路线</title>
+  <desc>对比"立绘优先""地图优先""分期摊销"三种美术预算分配方案的投入结构、风险与适用条件，推荐"地图瓦片集前置攻坚 + 立绘与地图交错摊销"的第三条路线。</desc>
+
+  <rect width="680" height="500" fill="#F7F8FA" rx="8"/>
+
+  <text x="24" y="32" font-size="17" font-weight="700" fill="#1A1D24">D-3 美术预算重心：三方案对照</text>
+  <text x="24" y="52" font-size="11.5" fill="#6B7280">核心矛盾：立绘是"量的大头"，瓦片集是"壁垒的大头"，二者不可能同时做满</text>
+
+  <!-- 表头 -->
+  <rect x="24" y="70" width="632" height="30" fill="#374151" rx="4"/>
+  <text x="132" y="90" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">方案 A｜立绘优先</text>
+  <text x="330" y="90" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">方案 B｜地图优先</text>
+  <text x="534" y="90" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">方案 C｜分期摊销 ★推荐</text>
+
+  <!-- 行 1：Demo 期投入 -->
+  <rect x="24" y="100" width="100" height="86" fill="#EEF2F6"/>
+  <text x="74" y="130" font-size="11" font-weight="600" fill="#374151" text-anchor="middle">Demo 期</text>
+  <text x="74" y="148" font-size="11" font-weight="600" fill="#374151" text-anchor="middle">（M1~M4）</text>
+  <text x="74" y="168" font-size="10" fill="#6B7280" text-anchor="middle">投入方向</text>
+
+  <rect x="124" y="100" width="168" height="86" fill="#FEF0EF"/>
+  <text x="208" y="128" font-size="11" fill="#7F1D1D" text-anchor="middle">22 套立绘抢先开工</text>
+  <text x="208" y="150" font-size="10.5" fill="#991B1B" text-anchor="middle">剧情/地图仍是原版外观</text>
+  <text x="208" y="172" font-size="10.5" fill="#991B1B" text-anchor="middle">✗ 玩家看不到"新世界"</text>
+
+  <rect x="292" y="100" width="168" height="86" fill="#FEF7EC"/>
+  <text x="376" y="128" font-size="11" fill="#78350F" text-anchor="middle">5 章地图 + 瓦片集全做</text>
+  <text x="376" y="150" font-size="10.5" fill="#92400E" text-anchor="middle">立绘全用原版占位</text>
+  <text x="376" y="172" font-size="10.5" fill="#92400E" text-anchor="middle">✓ 世界感立竿见影</text>
+
+  <rect x="460" y="100" width="196" height="86" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+  <text x="558" y="126" font-size="11" font-weight="600" fill="#065F46" text-anchor="middle">瓦片集 + 5 章地图 + 7 主角立绘</text>
+  <text x="558" y="148" font-size="10.5" fill="#047857" text-anchor="middle">只做 Demo 真正用到的量</text>
+  <text x="558" y="170" font-size="10.5" fill="#047857" text-anchor="middle">✓ 世界感 + 主角辨识度同时到位</text>
+
+  <!-- 行 2：M5 决策门时的状态 -->
+  <rect x="24" y="186" width="100" height="76" fill="#EEF2F6"/>
+  <text x="74" y="216" font-size="11" font-weight="600" fill="#374151" text-anchor="middle">M5 决策门时</text>
+  <text x="74" y="240" font-size="10" fill="#6B7280" text-anchor="middle">能否裁定体量</text>
+
+  <rect x="124" y="186" width="168" height="76" fill="#FEF0EF"/>
+  <text x="208" y="216" font-size="10.5" fill="#991B1B" text-anchor="middle">地图/关卡速度仍是空白</text>
+  <text x="208" y="240" font-size="10.5" fill="#991B1B" text-anchor="middle">✗ 体量裁定缺依据</text>
+
+  <rect x="292" y="186" width="168" height="76" fill="#FEF7EC"/>
+  <text x="376" y="216" font-size="10.5" fill="#92400E" text-anchor="middle">地图速度已知，立绘未知</text>
+  <text x="376" y="240" font-size="10.5" fill="#92400E" text-anchor="middle">△ 立绘工期靠猜</text>
+
+  <rect x="460" y="186" width="196" height="76" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+  <text x="558" y="216" font-size="10.5" fill="#047857" text-anchor="middle">两类速度都有实测样本</text>
+  <text x="558" y="240" font-size="10.5" fill="#047857" text-anchor="middle">✓ 体量裁定有真数据</text>
+
+  <!-- 行 3：全量期（M6）负担 -->
+  <rect x="24" y="262" width="100" height="86" fill="#EEF2F6"/>
+  <text x="74" y="292" font-size="11" font-weight="600" fill="#374151" text-anchor="middle">全量期</text>
+  <text x="74" y="310" font-size="11" font-weight="600" fill="#374151" text-anchor="middle">（M6）</text>
+  <text x="74" y="332" font-size="10" fill="#6B7280" text-anchor="middle">集中负担</text>
+
+  <rect x="124" y="262" width="168" height="86" fill="#FEF0EF"/>
+  <text x="208" y="292" font-size="10.5" fill="#991B1B" text-anchor="middle">20 章地图 + 全套瓦片集</text>
+  <text x="208" y="314" font-size="10.5" fill="#991B1B" text-anchor="middle">全部堆到最后</text>
+  <text x="208" y="336" font-size="10.5" font-weight="600" fill="#7F1D1D" text-anchor="middle">⚠ 尾部风险最大</text>
+
+  <rect x="292" y="262" width="168" height="86" fill="#FEF7EC"/>
+  <text x="376" y="292" font-size="10.5" fill="#92400E" text-anchor="middle">15 套立绘集中赶工</text>
+  <text x="376" y="314" font-size="10.5" fill="#92400E" text-anchor="middle">尾部堆积单类资产</text>
+  <text x="376" y="336" font-size="10.5" font-weight="600" fill="#92400E" text-anchor="middle">△ 风险中等</text>
+
+  <rect x="460" y="262" width="196" height="86" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+  <text x="558" y="292" font-size="10.5" fill="#047857" text-anchor="middle">15 章地图 + 15 套立绘</text>
+  <text x="558" y="314" font-size="10.5" fill="#047857" text-anchor="middle">按章配对推进，互为调剂</text>
+  <text x="558" y="336" font-size="10.5" font-weight="600" fill="#065F46" text-anchor="middle">✓ 负担最平滑</text>
+
+  <!-- 行 4：最大风险 -->
+  <rect x="24" y="348" width="100" height="66" fill="#EEF2F6"/>
+  <text x="74" y="386" font-size="11" font-weight="600" fill="#374151" text-anchor="middle">最大风险</text>
+
+  <rect x="124" y="348" width="168" height="66" fill="#FEF0EF"/>
+  <text x="208" y="378" font-size="10.5" fill="#991B1B" text-anchor="middle">未验证"地图能不能画出来"</text>
+  <text x="208" y="398" font-size="10.5" fill="#991B1B" text-anchor="middle">就投入最大美术量</text>
+
+  <rect x="292" y="348" width="168" height="66" fill="#FEF7EC"/>
+  <text x="376" y="378" font-size="10.5" fill="#92400E" text-anchor="middle">22 套立绘挤在尾部</text>
+  <text x="376" y="398" font-size="10.5" fill="#92400E" text-anchor="middle">可能拖垮 M6</text>
+
+  <rect x="460" y="348" width="196" height="66" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+  <text x="558" y="378" font-size="10.5" fill="#047857" text-anchor="middle">瓦片集壁垒须最早攻克</text>
+  <text x="558" y="398" font-size="10.5" fill="#047857" text-anchor="middle">→ 列为 M4 前置子任务</text>
+
+  <!-- 结论条 -->
+  <rect x="24" y="426" width="632" height="58" fill="#1F2937" rx="6"/>
+  <text x="40" y="450" font-size="12" font-weight="700" fill="#FBBF24">推荐 = 方案 C（分期摊销）</text>
+  <text x="40" y="472" font-size="11" fill="#E5E7EB">Demo 期：瓦片集 + 5 章地图 + 7 主角立绘 → M5 决策门：用真实速度裁定 12~15 章还是 20 章 → 全量期：地图与立绘按章配对推进</text>
+</svg>

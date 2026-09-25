@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 400" font-family="'Segoe UI','Microsoft YaHei',sans-serif">
+  <title>D-3 美术预算的里程碑投放时间线</title>
+  <desc>按 M1 到 M7 的时间轴，标出立绘、章节地图、地图瓦片集、战斗动画、图标、音乐、特效七类美术资产各自的投放窗口与批次数量。</desc>
+
+  <rect width="680" height="400" fill="#F7F8FA" rx="8"/>
+  <text x="24" y="32" font-size="17" font-weight="700" fill="#1A1D24">美术预算的里程碑投放时间线</text>
+  <text x="24" y="52" font-size="11.5" fill="#6B7280">原则：每一类资产都在"它第一次被需要"的那个里程碑投放，不提前囤积</text>
+
+  <!-- 时间轴 -->
+  <line x1="120" y1="88" x2="650" y2="88" stroke="#9CA3AF" stroke-width="2"/>
+  <!-- 里程碑节点 x: M1=140 M2=218 M3=296 M4=392 M5=470 M6=562 M7=636 -->
+  <g font-size="10.5" fill="#374151" text-anchor="middle">
+    <circle cx="140" cy="88" r="5" fill="#94A3B8"/>
+    <text x="140" y="76" font-weight="600">M1</text>
+    <circle cx="218" cy="88" r="5" fill="#94A3B8"/>
+    <text x="218" y="76" font-weight="600">M2</text>
+    <circle cx="296" cy="88" r="5" fill="#94A3B8"/>
+    <text x="296" y="76" font-weight="600">M3</text>
+    <circle cx="392" cy="88" r="6" fill="#E8912F"/>
+    <text x="392" y="76" font-weight="700">M4</text>
+    <circle cx="470" cy="88" r="6" fill="#D9534F"/>
+    <text x="470" y="76" font-weight="700">M5</text>
+    <circle cx="562" cy="88" r="5" fill="#94A3B8"/>
+    <text x="562" y="76" font-weight="600">M6</text>
+    <circle cx="636" cy="88" r="5" fill="#94A3B8"/>
+    <text x="636" y="76" font-weight="600">M7</text>
+  </g>
+
+  <!-- 行：标签列 + 条形 -->
+  <!-- 行高 34，首行 y=112 -->
+
+  <!-- 1 瓦片集 -->
+  <text x="112" y="131" font-size="11" fill="#374151" text-anchor="end" font-weight="600">地图瓦片集</text>
+  <rect x="130" y="118" width="240" height="18" fill="#C026D3" rx="3"/>
+  <text x="250" y="131" font-size="10" fill="#FFFFFF" text-anchor="middle">1 次攻克（M4 前置）</text>
+
+  <!-- 2 章节地图 -->
+  <text x="112" y="165" font-size="11" fill="#374151" text-anchor="end" font-weight="600">章节地图布局</text>
+  <rect x="360" y="152" width="70" height="18" fill="#E8912F" rx="3"/>
+  <text x="395" y="165" font-size="9.5" fill="#FFFFFF" text-anchor="middle">5 章</text>
+  <rect x="434" y="152" width="220" height="18" fill="#F5C48C" rx="3"/>
+  <text x="544" y="165" font-size="9.5" fill="#7C2D12" text-anchor="middle">15 章（按 M5 裁定体量）</text>
+
+  <!-- 3 角色立绘 -->
+  <text x="112" y="199" font-size="11" fill="#374151" text-anchor="end" font-weight="600">角色立绘</text>
+  <rect x="130" y="186" width="120" height="18" fill="#D9534F" rx="3"/>
+  <text x="190" y="199" font-size="9.5" fill="#FFFFFF" text-anchor="middle">7 套（Demo 7 人）</text>
+  <rect x="434" y="186" width="180" height="18" fill="#F0A6A3" rx="3"/>
+  <text x="524" y="199" font-size="9.5" fill="#7F1D1D" text-anchor="middle">15 套（剩余角色）</text>
+
+  <!-- 4 战斗动画 -->
+  <text x="112" y="233" font-size="11" fill="#374151" text-anchor="end" font-weight="600">战斗动画</text>
+  <rect x="130" y="220" width="120" height="18" fill="#8B5CF6" rx="3"/>
+  <text x="190" y="233" font-size="9.5" fill="#FFFFFF" text-anchor="middle">主角 1 套</text>
+  <rect x="434" y="220" width="130" height="18" fill="#C4B5FD" rx="3"/>
+  <text x="499" y="233" font-size="9.5" fill="#4C1D95" text-anchor="middle">关键反派（可选）</text>
+
+  <!-- 5 职业图标 + 武器图标 -->
+  <text x="112" y="267" font-size="11" fill="#374151" text-anchor="end" font-weight="600">职业 / 武器图标</text>
+  <rect x="130" y="254" width="180" height="18" fill="#3B82F6" rx="3"/>
+  <text x="220" y="267" font-size="9.5" fill="#FFFFFF" text-anchor="middle">随原创职业落地（调色板派生）</text>
+
+  <!-- 6 音乐 -->
+  <text x="112" y="301" font-size="11" fill="#374151" text-anchor="end" font-weight="600">BGM</text>
+  <rect x="180" y="288" width="180" height="18" fill="#A7F3D0" rx="3"/>
+  <text x="270" y="301" font-size="9.5" fill="#065F46" text-anchor="middle">先复用原版（零成本）</text>
+  <rect x="434" y="288" width="90" height="18" fill="#10B981" rx="3"/>
+  <text x="479" y="301" font-size="9.5" fill="#FFFFFF" text-anchor="middle">8 首原创</text>
+
+  <!-- 7 神器特效 -->
+  <text x="112" y="335" font-size="11" fill="#374151" text-anchor="end" font-weight="600">神器特效</text>
+  <rect x="130" y="322" width="120" height="18" fill="#F59E0B" rx="3"/>
+  <text x="190" y="335" font-size="9.5" fill="#FFFFFF" text-anchor="middle">惊雷引打通链路</text>
+  <rect x="360" y="322" width="90" height="18" fill="#FCD34D" rx="3"/>
+  <text x="405" y="335" font-size="9.5" fill="#78350F" text-anchor="middle">照夜</text>
+  <rect x="454" y="322" width="100" height="18" fill="#FDE68A" rx="3"/>
+  <text x="504" y="335" font-size="9.5" fill="#78350F" text-anchor="middle">剩余神器</text>
+
+  <!-- M5 决策门竖线 -->
+  <line x1="470" y1="100" x2="470" y2="348" stroke="#D9534F" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="470" y="366" font-size="10" fill="#D9534F" text-anchor="middle" font-weight="600">M5 决策门：裁定 12~15 章 / 20 章</text>
+
+  <!-- M4 门槛 -->
+  <line x1="392" y1="100" x2="392" y2="348" stroke="#E8912F" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="392" y="384" font-size="10" fill="#B45309" text-anchor="middle" font-weight="600">M4：Demo 五章可通关（美术零成本也能过）</text>
+</svg>
