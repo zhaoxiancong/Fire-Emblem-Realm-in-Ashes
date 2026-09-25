@@ -202,6 +202,35 @@ def main():
                 out.append("  0x%08X: " % (sp + off) + " ".join("%08X" % w for w in words))
             except Exception as e:
                 out.append("  (读 0x%08X 失败: %s)" % (sp + off, e)); break
+
+        # ── 若 r4 落在 EWRAM，疑似 MenuProc：dump 关键字段 ──
+        r4 = bad["r4"]
+        if 0x02000000 <= r4 <= 0x0203FFFF:
+            out.append("")
+            out.append("--- 疑似 MenuProc @ r4=0x%08X ---" % r4)
+            try:
+                rep = g.cmd("m%x,%x" % (r4 + 0x2C, 0x50), timeout=5)
+                raw = bytes.fromhex(rep)
+                words = [int.from_bytes(raw[k:k+4], "little") for k in range(0, len(raw), 4)]
+                for i, w in enumerate(words):
+                    out.append("  +0x%02X: 0x%08X" % (0x2C + i*4, w))
+                b = raw
+                def u8o(o): return b[o - 0x2C]
+                out.append("  -- 标量字段 --")
+                out.append("  def          (+0x30) = 0x%08X" % int.from_bytes(b[0x30-0x2C:0x34-0x2C], "little"))
+                out.append("  menuItems[0..10] (+0x34..0x60):")
+                for i in range(11):
+                    o = 0x34 + i*4
+                    out.append("    menuItems[%2d] = 0x%08X" % (i, int.from_bytes(b[o-0x2C:o-0x2C+4], "little")))
+                out.append("  itemCount    (+0x60) = %d" % b[0x60-0x2C])
+                out.append("  itemCurrent  (+0x61) = %d" % b[0x61-0x2C])
+                out.append("  itemPrevious (+0x62) = %d" % b[0x62-0x2C])
+                out.append("  state        (+0x63) = 0x%02X" % b[0x63-0x2C])
+                out.append("  tileref      (+0x66) = 0x%04X" % int.from_bytes(b[0x66-0x2C:0x68-0x2C], "little"))
+                out.append("  unk68        (+0x68) = 0x%04X" % int.from_bytes(b[0x68-0x2C:0x6A-0x2C], "little"))
+            except Exception as e:
+                out.append("  (读 MenuProc 失败: %s)" % e)
+
         txt = "\n".join(out)
         open(DUMP, "w").write(txt)
         log(txt)
