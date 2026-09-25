@@ -108,6 +108,26 @@ git push origin main
 - [ ] 改动涉及的文档头部版本号已 +1
 - [ ] 跨文档引用没写死绝对路径（一律用相对路径，如 `docs/3.游戏数值设定.md`）
 - [ ] 数值类改动只改 `3.游戏数值设定.md`，没在设计文档里复制数值
+- [ ] diff 异常庞大时，先用 `git diff --ignore-cr-at-eol` / `--ignore-all-space` 排除「格式化伪 diff」
+
+### 已知：编辑器格式化会造成「伪 diff」
+
+`docs/*.md` 会被**编辑器的 Markdown 格式化**改写（表格列宽对齐 + 行尾双空格）。项目内**没有** prettier / markdownlint / `.editorconfig` / `.vscode` 配置 —— 所以这不是项目行为，而是编辑器保存时自动触发。
+
+**识别**：diff 突然膨胀到几十上百行、但读起来内容没变时：
+
+```bash
+git diff --ignore-cr-at-eol --stat   # 先排除换行符差异
+git diff --ignore-all-space          # 再忽略全部空白差异，只看真实内容
+```
+
+若差异只剩表格竖线与空格排布，就是**格式化伪 diff**，不是内容改动。处理：
+
+```bash
+git checkout HEAD -- <文件>          # 丢弃格式改动，回到已提交状态
+```
+
+**注意**：这两个 `--ignore-*` 参数只改变「怎么看」，**不会**顺手把磁盘文件改回去 —— 要还原仍需 `git checkout`。
 
 ## 7. 凭据（已配置 PAT 静默鉴权）
 
