@@ -262,7 +262,8 @@ done
 [ "$missing" -eq 0 ] && ok "工具链完整" || err "工具链不完整，请先补齐"
 
 # 可选：调试器与模拟器
-for tool in gdb-multiarch arm-none-eabi-gdb mgba mgba-sdl; do
+# ⚠️ Ubuntu 24.04：`mgba-sdl` 包提供的二进制名是 `mgba`（不叫 mgba-sdl）
+for tool in gdb-multiarch arm-none-eabi-gdb mgba; do
   command -v "$tool" >/dev/null 2>&1 && printf "  %-24s %s\n" "$tool" "$(command -v "$tool")"
 done
 

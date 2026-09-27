@@ -975,17 +975,24 @@ else
   fi
 
   # ④ 可引导（mGBA 无头启动，不比对像素）
-  if command -v mgba-sdl >/dev/null 2>&1 || [ -x /usr/games/mgba-sdl ]; then
-    MG="$(command -v mgba-sdl || echo /usr/games/mgba-sdl)"
+  # ⚠️ 2026-09-27 修正：Ubuntu 24.04 的 `mgba-sdl` 包提供的二进制名是 **`mgba`**
+  #    （不叫 `mgba-sdl`），旧检查永远落空 ⇒ 本项被静默跳过，"五项自检"实际只跑四项。
+  #    现在按候选列表逐个探测（含 /usr/games，因非登录 shell 可能不带该路径）。
+  MG=""
+  for cand in "$(command -v mgba-sdl 2>/dev/null)" "$(command -v mgba 2>/dev/null)" \
+              /usr/games/mgba-sdl /usr/games/mgba; do
+    [ -n "$cand" ] && [ -x "$cand" ] && { MG="$cand"; break; }
+  done
+  if [ -n "$MG" ]; then
     timeout 12 "$MG" -l 0 -C "frames=60" "$FRAMEWORK_ROM" >/dev/null 2>&1
     RC=$?
     if [ $RC -eq 0 ] || [ $RC -eq 124 ]; then
-      ok "④ 可引导（mGBA 跑 60 帧无崩溃）"
+      ok "④ 可引导（$(basename "$MG") 跑 60 帧无崩溃）"
     else
       warn "④ mGBA 退出码 $RC（可能只是无头模式限制，建议人工目视确认）"
     fi
   else
-    warn "④ 无 mgba-sdl，跳过可引导检查（Windows 侧用 mGBA 目视）"
+    warn "④ 未找到 mGBA（已试 mgba-sdl / mgba / /usr/games/*）—— 跳过可引导检查（Windows 侧用 mGBA 目视）"
   fi
 
   # ⑤ 中文字形（粗检：ROM 内应含字库段；精检需实机）

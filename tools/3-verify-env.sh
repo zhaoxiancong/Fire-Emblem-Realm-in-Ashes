@@ -57,7 +57,9 @@ chk "numpy"      python3 -c "import numpy"
 chk "PIL/Pillow" python3 -c "import PIL"
 
 printf "\n${c_cyan}=== 4. 调试与模拟（可选）===${c_off}\n"
-for t in gdb-multiarch arm-none-eabi-gdb mgba mgba-sdl; do
+# ⚠️ Ubuntu 24.04：`mgba-sdl` 包提供的二进制名是 `mgba`（不叫 mgba-sdl），
+#    故只列出实际存在的名字，避免把"已装"误报成"未装"。
+for t in gdb-multiarch arm-none-eabi-gdb mgba; do
   if command -v "$t" >/dev/null 2>&1; then
     printf "  ${c_green}✓${c_off} %s\n" "$t"; pass=$((pass+1))
   else
