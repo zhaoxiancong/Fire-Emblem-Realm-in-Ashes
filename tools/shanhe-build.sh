@@ -10,6 +10,7 @@
 #   STATUS=1  bash tools/shanhe-build.sh       # 查看框架侧当前被改了什么（只读）
 #   RESTORE=1 bash tools/shanhe-build.sh       # 一键还原框架到 framework.lock 的上游状态
 #   SKIP_BUILD=1 bash tools/shanhe-build.sh    # 只铺设不构建（调试合并逻辑用）
+#   PRUNE_ONLY=1 bash tools/shanhe-build.sh    # 只跑日志清理（见下方「日志保留策略」），不构建
 #
 # 环境变量可覆盖：
 #   FRAMEWORK_DIR=/path   框架位置（默认 $HOME/projects/fireemblem8-expansion）
@@ -17,6 +18,8 @@
 #   SHANHE_ROM_DIR=/path  导出目录（默认 <仓库>/shanhe-rom，见第 5b 步）
 #   CLASH_PORT=7897       代理端口
 #   BUILD_TIMEOUT=1800    第 4 步 make 的硬超时秒数（默认 30 分钟；超时即中止，防无限悬挂）
+#   SHANHE_LOG_KEEP_BUILD=5   日志保留：build-*.log 份数（每次 3~5 MB，唯一的大件）
+#   SHANHE_LOG_KEEP_SMALL=20  日志保留：sync-/prewrite-/validate- 各份数（都是 KB 级）
 #
 # 规范：docs/6.方案B内容外置规划.md §3
 # 依赖声明：framework.lock
@@ -56,6 +59,29 @@ act()  { printf "  %s→%s %s\n" "$c_cyan" "$c_off" "$1";   printf "  [>]  %s\n"
 
 die() { bad "$1"; printf "\n  日志：%s\n" "$REPORT"; exit 1; }
 
+# ── 日志保留策略（防止 $LOG_DIR 无限膨胀，2026-09-28 新增）──
+#   实测：build-*.log 每次构建 3~5 MB，是这里唯一的大件（17 份 = 45 MB）；
+#   sync-/prewrite-/validate- 都是 KB 级。所以按前缀分别设保留份数。
+#   安全边界：只匹配本脚本自己写出的 4 个前缀 + 只扫 $LOG_DIR 一层，
+#   目录下其它文件一律不动；本轮正在写的 $REPORT 也显式跳过。
+SHANHE_LOG_KEEP_BUILD="${SHANHE_LOG_KEEP_BUILD:-5}"
+SHANHE_LOG_KEEP_SMALL="${SHANHE_LOG_KEEP_SMALL:-20}"
+
+prune_logs() {
+  local keep="$1" pat="$2" total removed=0 f
+  total=$(ls -1 "$LOG_DIR/$pat"* 2>/dev/null | wc -l)
+  [ "$total" -le "$keep" ] && return 0
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    [ "$f" = "$REPORT" ] && continue          # 绝不删本轮正在写的报告
+    [ "$f" = "$PREWRITE_SNAPSHOT" ] && continue
+    rm -f -- "$f" || return 1
+    removed=$((removed + 1))
+  done < <(ls -1t "$LOG_DIR/$pat"* 2>/dev/null | tail -n +$((keep + 1)))
+  printf "  %s日志清理：%s* 保留最近 %s 份（删除 %d 份）%s\n" \
+         "$c_dim" "$pat" "$keep" "$removed" "$c_off"
+}
+
 # ─────────────────────────── 头 ───────────────────────────
 printf "%s╔══════════════════════════════════════════════════════╗%s\n" "$c_cyan" "$c_off"
 printf "%s║   《山河烬》方案 B · 内容同步 + 构建                  ║%s\n" "$c_cyan" "$c_off"
@@ -68,6 +94,18 @@ printf "  日志：  %s\n" "$REPORT"
 if [ "$DRY_RUN" = "1" ]; then printf "  %s模式：DRY_RUN（预演，不落盘不构建）%s\n" "$c_yellow" "$c_off"; fi
 if [ "$STATUS"  = "1" ]; then printf "  %s模式：STATUS（只读）%s\n" "$c_yellow" "$c_off"; fi
 if [ "$RESTORE" = "1" ]; then printf "  %s模式：RESTORE（一键还原框架）%s\n" "$c_yellow" "$c_off"; fi
+
+# 日志保留（放在任何 dim()/H() 之前：此时 $REPORT 尚不存在，prune 不可能碰到它）
+prune_logs "$SHANHE_LOG_KEEP_BUILD" "build-"
+prune_logs "$SHANHE_LOG_KEEP_SMALL" "sync-"
+prune_logs "$SHANHE_LOG_KEEP_SMALL" "prewrite-"
+prune_logs "$SHANHE_LOG_KEEP_SMALL" "validate-"
+
+if [ "${PRUNE_ONLY:-0}" = "1" ]; then
+  printf "  日志目录：%s\n" "$LOG_DIR"
+  printf "  清理后：%s 个文件 / %s\n" "$(ls -1 "$LOG_DIR" | wc -l)" "$(du -sh "$LOG_DIR" 2>/dev/null | cut -f1)"
+  exit 0
+fi
 
 # ─────────────────────────── 工具 ───────────────────────────
 # 从 framework.lock 读一个键：lock_get <section> <key>
