@@ -14,7 +14,7 @@
 # 环境变量可覆盖：
 #   FRAMEWORK_DIR=/path   框架位置（默认 $HOME/projects/fireemblem8-expansion）
 #   CONTENT_DIR=/path     内容位置（默认本仓库的 content/）
-#   SHANHE_ROM_DIR=/path  导出目录（默认 /mnt/d/workbuddy/shanhe-rom）
+#   SHANHE_ROM_DIR=/path  导出目录（默认 <仓库>/shanhe-rom，见第 5b 步）
 #   CLASH_PORT=7897       代理端口
 #
 # 规范：docs/6.方案B内容外置规划.md §3
@@ -1006,8 +1006,13 @@ fi
 # ══════════════════════════════════════════
 H "第 5b 步 / 导出 ROM 到 Windows 侧"
 
-# 目标目录：Windows 的 D:\workbuddy\shanhe-rom 在 WSL 视角 = /mnt/d/workbuddy/shanhe-rom
-EXPORT_DIR="${SHANHE_ROM_DIR:-/mnt/d/workbuddy/shanhe-rom}"
+# 目标目录：本仓库内的 shanhe-rom/（2026-09-27 起 ROM 产物收进任务根内）
+#   Windows 视角：D:\workbuddy\Fire-Emblem-Realm-in-Ashes\shanhe-rom
+#   WSL   视角：/mnt/d/workbuddy/Fire-Emblem-Realm-in-Ashes/shanhe-rom
+# 写绝对路径而非 $REPO_ROOT，是为了让导出不依赖 ~/FEHRR 符号链接是否存在。
+EXPORT_DIR="${SHANHE_ROM_DIR:-/mnt/d/workbuddy/Fire-Emblem-Realm-in-Ashes/shanhe-rom}"
+# Windows 视角路径：自动换算，避免提示文案与实际目录漂移
+EXPORT_DIR_WIN="$(wslpath -w "$EXPORT_DIR" 2>/dev/null || printf '%s' "$EXPORT_DIR")"
 # 文件名派生自 lock 的 rom_size_label（32M → shanhe-cn-32m.gba），
 # 与 `启动山河烬中文版.cmd` 里写死的路径保持一致。
 ROM_LABEL="$(lock_get build rom_size_label)"; ROM_LABEL="${ROM_LABEL:-32M}"
@@ -1043,9 +1048,9 @@ else
     die "导出 ROM 的 SHA1 与产物不一致（产物 $ROM_SHA1 vs 导出 $EXPORT_SHA1）—— 复制被截断，不要拿它试玩。"
   fi
   ok "已导出：$EXPORT_PATH"
-  dim "Windows 路径：D:\\workbuddy\\shanhe-rom\\$EXPORT_NAME"
+  dim "Windows 路径：$EXPORT_DIR_WIN\\$EXPORT_NAME"
   dim "SHA1 校验一致（$EXPORT_SHA1）✓ —— 试玩目录与本次产物是同一个 ROM"
-  dim "双击启动：D:\\workbuddy\\shanhe-rom\\启动山河烬中文版.cmd"
+  dim "双击启动：$EXPORT_DIR_WIN\\启动山河烬中文版.cmd"
 fi
 
 # ══════════════════════════════════════════
@@ -1136,6 +1141,6 @@ else
   printf "\n  下一步：\n"
   printf "    · 查看框架被改了什么   → bash tools/shanhe-build.sh STATUS=1\n"
   printf "    · 一键还原框架         → bash tools/shanhe-build.sh RESTORE=1\n"
-  printf "    · 实机试玩             → 双击 D:\\workbuddy\\shanhe-rom\\启动山河烬中文版.cmd\n"
+  printf "    · 实机试玩             → 双击 %s\\启动山河烬中文版.cmd\n" "$EXPORT_DIR_WIN"
 fi
 exit 0

@@ -6,6 +6,8 @@
 
 # ============ 构建产物（兜底：万一有人在 Windows 侧误构建） ============
 build/
+# ROM 导出目录（任务根内的产物区：ROM + 启动/调试 .cmd，见 docs/5 §3.6、docs/6 §3.1 第 5b 步）
+/shanhe-rom/
 dist/
 *.gba
 *.elf
