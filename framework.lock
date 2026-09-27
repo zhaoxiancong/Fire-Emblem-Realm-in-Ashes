@@ -63,7 +63,19 @@ mechanics_hooks  = 1
 #   —— 本项目用自有机制与自有道具，不链接框架样例。
 
 [locales]
-# 中文是官方一等公民；32M 是「任何真实本地化语言」的共同要求，非中文独享
+# 中文是官方一等公民；32M 是「任何真实本地化语言」的共同要求，非中文独享。
+# ------------------------------------------------------------
+# ★ 这两个键 + [build] 的 rom_size_label 由 shanhe-build.sh 派生为 make 命令行变量：
+#     MODERN_ROM_SIZE=<rom_size_label>
+#     EXPANSION_ENABLED_LOCALES=<enabled>
+#     EXPANSION_DEFAULT_LOCALE=<default>
+#   —— 换机后**不依赖任何机器本地生成物**（旧文档让跑 ./configure 生成
+#   config.autotools.mk，那是本地文件、clone 带不来；缺它则 make 静默落回
+#   en + 16M，编出 16M 英文 ROM，直到第 5 步尺寸断言才炸）。
+#   改这里 = 改中文构建配置，改完必须重跑 tools/shanhe-build.sh。
+#   硬约束：enabled 含任何真实本地化语言（zh-Hans/ja/fr/de/es/it）时，
+#   rom_size_label 必须同时是 32M，否则脚本第 1 步即失败
+#   （框架侧 scripts/modernize/expansion_config.py:validate_locale_rom_size 同规则）。
 enabled = en,zh-Hans
 default = zh-Hans
 

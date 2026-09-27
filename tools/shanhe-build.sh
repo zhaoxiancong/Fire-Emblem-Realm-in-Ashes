@@ -16,6 +16,7 @@
 #   CONTENT_DIR=/path     内容位置（默认本仓库的 content/）
 #   SHANHE_ROM_DIR=/path  导出目录（默认 <仓库>/shanhe-rom，见第 5b 步）
 #   CLASH_PORT=7897       代理端口
+#   BUILD_TIMEOUT=1800    第 4 步 make 的硬超时秒数（默认 30 分钟；超时即中止，防无限悬挂）
 #
 # 规范：docs/6.方案B内容外置规划.md §3
 # 依赖声明：framework.lock
@@ -79,6 +80,34 @@ lock_get() {
   ' "$LOCK_FILE"
 }
 
+# ── 内容感知写入（幂等写入，2026-09-27 新增） ──
+# 用法：write_if_changed <目标文件>   （新内容从 stdin 读）
+#   返回 0 = 本次真的写了（内容变了）   返回 1 = 内容一致，未写
+#
+# 为什么必须有它：铺设步骤若"无论内容变没变都重写一遍"，会把框架侧被覆盖文件的
+# mtime 全部刷新 —— 制造大量**无意义的写入事件**（下游噪音、diff 幻影）。
+# 所以凡是由脚本写入框架的生成物，一律先比内容；一致就**不落盘**，让 mtime 保持不动。
+#
+# ⚠️ 这**不足以**换来"增量构建"。框架侧 5 组生成物挂在 phony `FORCE_*` 目标上，
+# GNU Make 认的是"该先决条件本轮被重新生成过"这一**事件**，而不是时间戳比较 ——
+# 故 492 个 .c 每轮仍全量重编（2026-09-27 实测，真因见 docs/5 §9.0 第 10 条）。
+# write_if_changed 的价值在**幂等**与"不制造无谓写入"，不在加速编译。
+# 用 mv 而非 cp：同目录内 mv 是原子的，且天然赋予"内容已变"的新 mtime。
+write_if_changed() {
+  local dst="$1" tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/shanhe-wic-XXXXXX")" || return 0
+  cat > "$tmp"
+  if [ -f "$dst" ] && cmp -s "$tmp" "$dst"; then
+    rm -f "$tmp"; return 1
+  fi
+  mkdir -p "$(dirname "$dst")" 2>/dev/null
+  if mv -f "$tmp" "$dst" 2>/dev/null; then return 0; fi
+  # 跨文件系统（/tmp → /mnt/d 等）时 mv 会退化为 copy+unlink，仍然可行；
+  # 真失败则兜底 cp：
+  if cp -f "$tmp" "$dst" 2>/dev/null; then rm -f "$tmp"; return 0; fi
+  rm -f "$tmp"; return 2
+}
+
 FRAMEWORK_REPO="$(lock_get framework repo)"
 FRAMEWORK_COMMIT="$(lock_get framework commit)"
 FRAMEWORK_BRANCH="$(lock_get framework branch)"
@@ -86,8 +115,6 @@ FRAMEWORK_SUBJECT="$(lock_get framework commit_subject)"
 MG_COMMIT="$(lock_get submodule.mgfembp commit)"
 MG_PROBE="$(lock_get submodule.mgfembp probe_file)"
 MAKE_TARGET="$(lock_get build make_target)"
-M_CFG="$(lock_get build modern_config)"
-M_ABI="$(lock_get build modern_abi)"
 ROM_REL="$(lock_get build rom_path)"
 ROM_BYTES="$(lock_get build rom_size_bytes)"
 TITLE_EXPECT="$(lock_get build rom_header_game_title)"
@@ -99,10 +126,28 @@ CODE_EXPECT="$(lock_get build rom_header_game_code)"
 FEAT_ITEM_CAP="$(lock_get features item_id_cap)"
 FEAT_MECH_HOOKS="$(lock_get features mechanics_hooks)"
 
+# ── [locales] + [build].rom_size_label：本地化 + ROM 尺寸（同一单一事实来源） ──
+# ⚠️ 2026-09-27 换机实测教训（真凶，非 config.autotools.mk）：
+#   本机框架是**全新浅克隆**，不存在旧机遗留的 config.autotools.mk（那是 `./configure`
+#   的产物，git 里没有，clone 更不会带来）。而旧文档把「切中文」指向
+#   `./configure --with-enabled-locales=... --with-rom-size=32M`。
+#   只传 FE8_ITEM_ID_CAP / EXPANSION_MECHANICS_HOOKS 时，make 落回 config.mk 默认
+#   `EXPANSION_ENABLED_LOCALES ?= en`（config.mk:87）、`MODERN_ROM_SIZE ?= 16M`
+#   ⇒ 静默产出 **16M 英文 ROM**，直到第 5 步 ② 尺寸断言才炸（16777216 vs 33554432）。
+#   修法（铁律之六「能派生的必须派生」）：locale 与尺寸这两组值**同样从
+#   framework.lock 派生**，作为 make 命令行变量下发 —— 不依赖任何机器本地生成物，
+#   也不再需要跑 ./configure。这同时让「lock 是唯一依赖声明」在本脚本内自洽。
+LOCALES_ENABLED="$(lock_get locales enabled)"
+LOCALE_DEFAULT="$(lock_get locales default)"
+ROM_SIZE_LABEL="$(lock_get build rom_size_label)"
+
 # 拼装 make 命令行变量（空值 = 不传，用框架默认）
 MAKE_VARS=""
 [ -n "$FEAT_ITEM_CAP" ] && MAKE_VARS="$MAKE_VARS FE8_ITEM_ID_CAP=$FEAT_ITEM_CAP"
 [ -n "$FEAT_MECH_HOOKS" ] && MAKE_VARS="$MAKE_VARS EXPANSION_MECHANICS_HOOKS=$FEAT_MECH_HOOKS"
+[ -n "$ROM_SIZE_LABEL" ] && MAKE_VARS="$MAKE_VARS MODERN_ROM_SIZE=$ROM_SIZE_LABEL"
+[ -n "$LOCALES_ENABLED" ] && MAKE_VARS="$MAKE_VARS EXPANSION_ENABLED_LOCALES=$LOCALES_ENABLED"
+[ -n "$LOCALE_DEFAULT" ] && MAKE_VARS="$MAKE_VARS EXPANSION_DEFAULT_LOCALE=$LOCALE_DEFAULT"
 MAKE_VARS="${MAKE_VARS# }"
 
 # ⚠️ 同时 export：generated_data 的 Python 工具链（validate/generate/idspace）
@@ -115,6 +160,42 @@ if [ -n "$FEAT_ITEM_CAP" ]; then
 fi
 if [ -n "$FEAT_MECH_HOOKS" ]; then
   export EXPANSION_MECHANICS_HOOKS="$FEAT_MECH_HOOKS"
+fi
+# locale / ROM 尺寸同样 export：scripts/modernize/expansion_config.py 的
+# validate_locale_rom_size() 会读环境变量做「真实 locale 必须 32M」的硬校验。
+# 不 export 的后果：make 侧按 zh-Hans+32M 编译，而某些 python 侧动作仍按
+# en+16M 判定 ⇒ 两边看到不同的配置身份，报错或产出不一致的表。
+[ -n "$ROM_SIZE_LABEL" ] && export MODERN_ROM_SIZE="$ROM_SIZE_LABEL"
+[ -n "$LOCALES_ENABLED" ] && export EXPANSION_ENABLED_LOCALES="$LOCALES_ENABLED"
+[ -n "$LOCALE_DEFAULT" ] && export EXPANSION_DEFAULT_LOCALE="$LOCALE_DEFAULT"
+
+# ── 派生气味自检 ①：locale 与 ROM 尺寸的硬约束（框架侧同样会硬失败，这里提前一步） ──
+# 依据：scripts/modernize/expansion_config.py:validate_locale_rom_size()
+#   任何**真实**非英语 locale（zh-Hans 属之）都要求 ROM = 32M。
+# 提前拦下的价值：报错发生在第 1 步而不是编译 10 分钟后。
+REAL_LOCALE_HIT=0
+case ",$LOCALES_ENABLED," in
+  *,zh-Hans,*|*,ja,*|*,fr,*|*,de,*|*,es,*|*,it,*) REAL_LOCALE_HIT=1 ;;
+esac
+if [ "$REAL_LOCALE_HIT" = "1" ] && [ "$ROM_BYTES" != "33554432" ]; then
+  die "locales.enabled='$LOCALES_ENABLED' 含真实本地化语言，但 build.rom_size_label='$ROM_SIZE_LABEL'（$ROM_BYTES 字节）。框架要求二者同为 32M —— 请改 framework.lock。"
+fi
+
+# ── 派生气味自检 ②：lock 的 modern_config/modern_abi 与 `all` 目标的实际行为是否一致 ──
+# Makefile 的 `all:` 目标是**硬编码** `$(MAKE) expansion-modern-boot-check
+# MODERN_CONFIG=release MODERN_ABI=aapcs`（Makefile:262-277）——配方里显式赋值的
+# 命令行变量会**覆盖**外层经 MAKEFLAGS 传下去的值，所以把 M_CFG/M_ABI 塞进
+# MAKE_VARS 是自欺欺人（会被静默忽略）。正确做法是**断言**二者一致：
+# 不一致就早告警，而不是等拿到错的车道产物。
+M_CFG="$(lock_get build modern_config)"
+M_ABI="$(lock_get build modern_abi)"
+ALL_LINE="$(grep -m1 'expansion-modern-boot-check MODERN_CONFIG=' "$FRAMEWORK_DIR/Makefile" 2>/dev/null)"
+if [ -n "$ALL_LINE" ]; then
+  case "$ALL_LINE" in
+    *"MODERN_CONFIG=$M_CFG MODERN_ABI=$M_ABI"*) : ;;
+    *) warn "派生气味：framework.lock 的 modern_config/abi = $M_CFG/$M_ABI，"
+       warn "       但 Makefile 的 \`all\` 目标硬编码为另一组 —— lock 该段已失真，请同步。" ;;
+  esac
 fi
 
 FRAMEWORK_ROM="$FRAMEWORK_DIR/$ROM_REL"
@@ -320,6 +401,7 @@ H "第 3 步 / 铺设（合并 content/ → 框架）"
 
 MERGED_COUNT=0
 SKIPPED_COUNT=0
+DATA_WRITTEN=0      # 只统计 data/*.json 的**实际写入数**（3a' 的门禁用它，不用 MERGED_COUNT）
 
 # ── 3a. data/*.json 按语义合并 ──
 merge_json() {
@@ -329,7 +411,7 @@ merge_json() {
     SKIPPED_COUNT=$((SKIPPED_COUNT+1)); return 0
   fi
   python3 - "$src" "$dst" "$name" "$DRY_RUN" <<'PY'
-import json, sys, copy
+import json, sys, copy, os
 src, dst, name, dry = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
 
 with open(src, encoding="utf-8") as f: patch = json.load(f)
@@ -449,6 +531,14 @@ out = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
 if dry:
     print(f"        [预演] 未写入 {dst}")
 else:
+    # 内容感知写入（2026-09-27）：一致就**不落盘**。落盘会刷新 mtime ⇒
+    # generated_data 全表重生成 ⇒ 全量重编。退出码 3 = "无变化"（区别于 2 = 错误）。
+    old = ""
+    if os.path.exists(dst):
+        with open(dst, encoding="utf-8") as f: old = f.read()
+    if old == out:
+        print(f"        \033[2m[unchanged]\033[0m src/data/{name} 内容未变，跳过写入（保 mtime）")
+        sys.exit(3)
     with open(dst, "w", encoding="utf-8") as f: f.write(out)
 PY
 }
@@ -459,10 +549,15 @@ if [ -d "$CONTENT_DIR/data" ] && [ -n "$(ls -A "$CONTENT_DIR/data" 2>/dev/null)"
     name="$(basename "$f")"
     if [ "$DRY_RUN" = "1" ]; then
       act "[预演] 合并 data/$name → src/data/$name"
+      MERGED_COUNT=$((MERGED_COUNT+1))
     else
-      merge_json "$name" || die "合并 $name 失败"
+      merge_json "$name"; RC=$?
+      case "$RC" in
+        0) MERGED_COUNT=$((MERGED_COUNT+1)); DATA_WRITTEN=$((DATA_WRITTEN+1)) ;;
+        3) SKIPPED_COUNT=$((SKIPPED_COUNT+1)) ;;          # 内容未变，未落盘（幂等关键）
+        *) die "合并 $name 失败" ;;
+      esac
     fi
-    MERGED_COUNT=$((MERGED_COUNT+1))
   done
 else
   dim "content/data/ 为空 —— 无非原创数据可合并（M1 阶段正常）"
@@ -485,7 +580,7 @@ fi
 B2_TABLES="characters classes items supports"
 B2_TOUCHED=""
 
-if [ "$DRY_RUN" != "1" ] && [ "$MERGED_COUNT" -gt 0 ] && [ -d "$FRAMEWORK_DIR/scripts/generated_data" ]; then
+if [ "$DRY_RUN" != "1" ] && [ "$DATA_WRITTEN" -gt 0 ] && [ -d "$FRAMEWORK_DIR/scripts/generated_data" ]; then
   act "锁定表处理（数据校验 → B' 回填 → round-trip 复核）…"
 
   for t in $B2_TABLES; do
@@ -515,7 +610,10 @@ if [ "$DRY_RUN" != "1" ] && [ "$MERGED_COUNT" -gt 0 ] && [ -d "$FRAMEWORK_DIR/sc
     # ② B' 回填：generate --no-roundtrip → 覆盖手写参考
     if ( cd "$FRAMEWORK_DIR" && python3 -m scripts.generated_data generate \
           --table "$t" --no-roundtrip --out-dir build/generated/data ) >> "$VD_LOG" 2>&1; then
-      if cp -f "$FRAMEWORK_DIR/$GEN" "$FRAMEWORK_DIR/$HAND" 2>/dev/null; then
+      if [ -f "$FRAMEWORK_DIR/$HAND" ] && cmp -s "$FRAMEWORK_DIR/$GEN" "$FRAMEWORK_DIR/$HAND"; then
+        # 内容感知（2026-09-27）：一致就不 cp。cp 会刷新 mtime ⇒ 该表的 .o 重编。
+        dim "[$t] ② B' 回填：与生成产物已逐字节一致，跳过（保 mtime ⇒ 不触发重编）"
+      elif cp -f "$FRAMEWORK_DIR/$GEN" "$FRAMEWORK_DIR/$HAND" 2>/dev/null; then
         ok "[$t] ② B' 回填完成（$HAND ← $GEN）"
       else
         die "[$t] ② 回填失败：无法写入 $HAND"
@@ -555,6 +653,11 @@ if [ "$DRY_RUN" != "1" ] && [ "$MERGED_COUNT" -gt 0 ] && [ -d "$FRAMEWORK_DIR/sc
       *) warn "content/data/$base.json 不在自动处理名单（可能是章节表/新表）—— 请确认其落点与 round-trip 策略" ;;
     esac
   done
+else
+  # 2026-09-27 新增：内容一致时**整块跳过**。这不是"偷懒不做校验"，而是：
+  # 校验的对象是"本次改动"，没有改动就没有新对象；而跑 generate 会刷新
+  # build/generated/data/*.c 的 mtime 一旦刷新，会在框架侧制造无谓的写入事件（下游噪音）。
+  [ "$DRY_RUN" = "1" ] || dim "锁定表处理：content/data 与框架逐字节一致（0 项写入）—— 跳过校验/回填（不落盘 ⇒ mtime 不动）"
 fi
 
 # ── 3b. texts/ 合并 ──
@@ -571,12 +674,14 @@ if [ -d "$CONTENT_DIR/texts" ] && [ -n "$(find "$CONTENT_DIR/texts" -type f -not
     src="$CONTENT_DIR/texts/$rel"; dst="$FRAMEWORK_DIR/texts/$rel"
     if [ "$DRY_RUN" = "1" ]; then
       act "[预演] 铺设 texts/$rel → texts/$rel"
+      MERGED_COUNT=$((MERGED_COUNT+1))
+    elif write_if_changed "$dst" < "$src"; then
+      act "[copy] texts/$rel（内容有变，已更新）"
+      MERGED_COUNT=$((MERGED_COUNT+1))
     else
-      mkdir -p "$(dirname "$dst")"
-      cp "$src" "$dst"
-      act "[copy] texts/$rel"
+      dim "[unchanged] texts/$rel 内容未变，跳过写入（保 mtime）"
+      SKIPPED_COUNT=$((SKIPPED_COUNT+1))
     fi
-    MERGED_COUNT=$((MERGED_COUNT+1))
   done < <(cd "$CONTENT_DIR/texts" && find . -type f -not -name '.gitkeep' -not -name 'indexed_overrides.*.json' | sed 's|^\./||')
 else
   dim "content/texts/ 无整体铺设文件（M1 阶段正常）"
@@ -610,7 +715,7 @@ if [ -n "$TEXT_OVERRIDE_PATCHES" ]; then
       TEXT_OVR_N=$((TEXT_OVR_N+1)); MERGED_COUNT=$((MERGED_COUNT+1))
       continue
     fi
-    if python3 - "$patch" "$FRAMEWORK_DIR" <<'PY' >> "$REPORT" 2>&1
+    python3 - "$patch" "$FRAMEWORK_DIR" <<'PY' >> "$REPORT" 2>&1
 import json, sys, os
 patch_path, fw = sys.argv[1], sys.argv[2]
 patch = json.load(open(patch_path, encoding="utf-8"))
@@ -628,17 +733,29 @@ for sid, rec in patch.get("overrides", {}).items():
         print(f"  override {sid} missing fields: {missing}"); sys.exit(2)
     entries[key] = {k: rec[k] for k in ("expected_text", "provenance", "reason", "replacement_text")}
     n += 1
+# 内容感知（2026-09-27）：合并结果与现有文件一致 ⇒ 不落盘、退出码 3。
+# 落盘会刷新 indexed_overrides.json 的 mtime，进而让下面的 regenerate 每次都跑、
+# 把 1.3MB 的 indexed.txt 重写一遍 ⇒ 上游 locale 资源整体重编。
+out = json.dumps(base, ensure_ascii=False, indent=2)
+old = ""
+if os.path.exists(dst):
+    with open(dst, encoding="utf-8") as f: old = f.read()
+if old == out:
+    print(f"  [unchanged] indexed_overrides.json 合并后无变化（{n} 条覆盖已在内）")
+    sys.exit(3)
 with open(dst, "w", encoding="utf-8") as f:
-    json.dump(base, f, ensure_ascii=False, indent=2)
+    f.write(out)
 print(f"  merged {n} overrides from {os.path.basename(patch_path)}")
 PY
-    then
-      ok "[文本] $name 合并入 indexed_overrides.json"
-      TEXT_OVR_N=$((TEXT_OVR_N+1)); MERGED_COUNT=$((MERGED_COUNT+1))
-    else
-      bad "[文本] $name 合并失败"; tail -10 "$REPORT" | sed 's/^/      /'
-      die "[文本] 覆盖补丁合并失败"
-    fi
+    RC=$?
+    case "$RC" in
+      0) ok "[文本] $name 合并入 indexed_overrides.json"
+         TEXT_OVR_N=$((TEXT_OVR_N+1)); MERGED_COUNT=$((MERGED_COUNT+1)) ;;
+      3) dim "[文本] $name 的覆盖已在框架中（内容未变），跳过写入（保 mtime）"
+         SKIPPED_COUNT=$((SKIPPED_COUNT+1)) ;;
+      *) bad "[文本] $name 合并失败"; tail -10 "$REPORT" | sed 's/^/      /'
+         die "[文本] 覆盖补丁合并失败" ;;
+    esac
   done < <(printf '%s\n' "$TEXT_OVERRIDE_PATCHES")
 
   if [ "$TEXT_OVR_N" -gt 0 ] && [ "$DRY_RUN" != "1" ]; then
@@ -679,24 +796,32 @@ if [ -n "$MSG_OVERRIDE_PATCHES" ]; then
     if [ "$DRY_RUN" = "1" ]; then
       act "[预演] 合并 ROM 消息表补丁：$(basename "$patch") → texts/texts.txt"
     else
-      # ⚠️ 幂等：先把 texts.txt 还原为钉住版本（HEAD）再打补丁。
-      #    否则第二次运行时，当前内容已是上一次写入的中文，
-      #    补丁里的 expected_text（英文原文）必然对不上 → 构建失败。
-      #    （2026-09-25 实机踩到：## MSG_030A 期望与实际不符）
-      if ! ( cd "$FRAMEWORK_DIR" && git checkout HEAD -- texts/texts.txt ) 2>/dev/null; then
-        bad "[消息表] 无法还原 texts/texts.txt（文件不在 git 追踪内？）"
-        continue
-      fi
-      if python3 - "$patch" "$FRAMEWORK_DIR/texts/texts.txt" "$DRY_RUN" <<'PYMSG' >> "$REPORT" 2>&1
-import json, re, sys
-patch_path, target_path = sys.argv[1], sys.argv[2]
+      # ⚠️ 幂等 + 内容感知（2026-09-27 加强）
+      #   旧实现：每次先 `git checkout HEAD -- texts/texts.txt` 再打补丁。幂等确实做到了
+      #     （否则第二次运行补丁里的 expected_text 对不上 —— 2026-09-25 实机踩到
+      #     「## MSG_030A 期望与实际不符」），但 checkout 会**无条件刷新 mtime**，
+      #     于是 src/msg_data.c → ROM 每次都重编。
+      #   新实现：基底不再靠 checkout，而是 `git show HEAD:texts/texts.txt` 读进内存；
+      #     打补丁后的结果与磁盘现内容逐字节比较 —— 一致就既不落盘也不动 mtime（退出码 3）。
+      #     "幂等"因此成立，且去掉了"先还原"这个有副作用的动作。
+      python3 - "$patch" "$FRAMEWORK_DIR/texts/texts.txt" "$DRY_RUN" <<'PYMSG' >> "$REPORT" 2>&1
+import json, re, subprocess, sys, os
+patch_path, target_path, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 with open(patch_path, encoding="utf-8") as f:
     patch = json.load(f)
 msgs = patch.get("messages") or {}
 if not msgs:
     print("msg_overrides: 无 messages，跳过"); sys.exit(0)
-with open(target_path, encoding="utf-8") as f:
-    lines = f.read().split("\n")
+
+# 基底 = git 里的钉住版本（HEAD）。用 git show 读进内存，**不** checkout（保 mtime）。
+fw = os.path.dirname(os.path.dirname(target_path))
+rel = os.path.relpath(target_path, fw)
+try:
+    pristine = subprocess.run(["git", "-C", fw, "show", "HEAD:" + rel],
+                              capture_output=True, text=True, check=True).stdout
+except subprocess.CalledProcessError:
+    print(f"msg_overrides: 无法从 git 读取 HEAD:{rel}（文件不在追踪内？）"); sys.exit(2)
+lines = pristine.split("\n")
 
 # 建索引：## MSG_<HEX> → 其后正文行区间 [start, end)
 idx = {}
@@ -738,17 +863,28 @@ for hexkey in sorted(msgs.keys(), key=lambda k: int(k, 16), reverse=True):
     applied += 1
     print(f"msg_overrides: ## MSG_{hexkey[2:].upper()} 已覆盖")
 
+new_content = "\n".join(lines)
+cur = ""
+if os.path.exists(target_path):
+    with open(target_path, encoding="utf-8") as f:
+        cur = f.read()
+if cur == new_content:
+    print(f"msg_overrides: 共 {applied} 条 —— 与磁盘现内容一致，跳过写入（保 mtime）")
+    sys.exit(3)
+if dry:
+    print("[预演] 未写入 texts.txt"); sys.exit(0)
 with open(target_path, "w", encoding="utf-8") as f:
-    f.write("\n".join(lines))
+    f.write(new_content)
 print(f"msg_overrides: 共 {applied} 条")
 PYMSG
-      then
-        ok "[消息表] $(basename "$patch") 已合并进 texts/texts.txt"
-      else
-        bad "[消息表] 合并失败：$(basename "$patch")"
-        tail -20 "$REPORT" | sed 's/^/      /'
-        die "[消息表] texts.txt 覆盖失败（expected_text 不符或 target id 有误）"
-      fi
+      RC=$?
+      case "$RC" in
+        0) ok "[消息表] $(basename "$patch") 已合并进 texts/texts.txt" ;;
+        3) dim "[消息表] $(basename "$patch") 已在位（内容未变），跳过写入（保 mtime）" ;;
+        *) bad "[消息表] 合并失败：$(basename "$patch")"
+           tail -20 "$REPORT" | sed 's/^/      /'
+           die "[消息表] texts.txt 覆盖失败（expected_text 不符或 target id 有误）" ;;
+      esac
     fi
   done < <(printf '%s\n' "$MSG_OVERRIDE_PATCHES")
   [ "$DRY_RUN" = "1" ] && [ "$MSG_OVR_N" -gt 0 ] && dim "共 $MSG_OVR_N 个消息表补丁待合并"
@@ -758,6 +894,7 @@ fi
 
 # ── 3c. src/*.c 铺为 src/shanhe_*.c ──
 SRC_ADDED=0
+SRC_NAMES=""
 if [ -d "$CONTENT_DIR/src" ] && [ -n "$(ls -A "$CONTENT_DIR/src" 2>/dev/null | grep -v '^\.gitkeep$')" ]; then
   for f in "$CONTENT_DIR/src"/*.c; do
     [ -f "$f" ] || continue
@@ -772,24 +909,30 @@ if [ -d "$CONTENT_DIR/src" ] && [ -n "$(ls -A "$CONTENT_DIR/src" 2>/dev/null | g
       action_semantics.c|expansion_log.c|expansion_autoplay.c|expansion_chapter_objectives.c|expansion_autoplay_strategies.c|expansion_blue_phase_delegate.c)
         bad "src/$out 与框架排除清单冲突，跳过"; continue ;;
     esac
+    SRC_NAMES="$SRC_NAMES $out"
     if [ "$DRY_RUN" = "1" ]; then
       act "[预演] 铺设 src/$base → src/$out"
+    elif write_if_changed "$FRAMEWORK_DIR/src/$out" < "$f"; then
+      act "[copy] src/$base → src/$out（内容有变）"
+      SRC_ADDED=$((SRC_ADDED+1))
     else
-      cp "$f" "$FRAMEWORK_DIR/src/$out"
-      act "[copy] src/$base → src/$out"
+      dim "[unchanged] src/$out 内容未变，跳过写入（保 mtime）"
     fi
-    SRC_ADDED=$((SRC_ADDED+1))
-  done > /dev/null 2>&1 || true
-  # 重新打印（上面的 act 已写日志，这里补屏幕输出）
-  SRCS="$(ls "$CONTENT_DIR/src"/*.c 2>/dev/null | wc -l)"
-  if [ "$SRCS" -gt 0 ]; then
-    if [ "$DRY_RUN" = "1" ]; then
-      dim "共 $SRCS 个 .c 待铺设（上方已逐条列出）"
-    else
-      ok "共 $SRC_ADDED 个 .c 已铺入 src/"
-      ok "已 touch Makefile（wildcard 解析期展开，必须触发生成器重扫）"
-      touch "$FRAMEWORK_DIR/Makefile"
-    fi
+  done
+  # ★ 只在「框架侧 shanhe_*.c 集合」真的变化时才 touch Makefile（2026-09-27 修正）
+  #   为什么（本机实测）：Makefile 一被 touch，几乎所有依赖它的目标全部重编 ——
+  #   零内容变更也要赔上约 6 分钟。而 touch 的目的**仅仅**是让 make 在解析期
+  #   重新展开 `$(wildcard src/*.c)`（只有**新增/删除** .c 才需要触发那个生成器）；
+  #   文件**内容**变化已经由 write_if_changed 落盘时的新 mtime 自然触发，不需要动 Makefile。
+  HAVE_SRC="$(cd "$FRAMEWORK_DIR" && ls src/shanhe_*.c 2>/dev/null | sed 's|.*/||' | sort | tr '\n' ' ')"
+  WANT_SRC="$(printf '%s\n' $SRC_NAMES | sed '/^$/d' | sort | tr '\n' ' ')"
+  if [ "$DRY_RUN" = "1" ]; then
+    dim "共 $(printf '%s\n' $SRC_NAMES | sed '/^$/d' | wc -l | tr -d ' ') 个 .c 待铺设"
+  elif [ "$HAVE_SRC" != "$WANT_SRC" ]; then
+    touch "$FRAMEWORK_DIR/Makefile"
+    ok "$SRC_ADDED 个 .c 内容更新；集合有变化 → 已 touch Makefile（wildcard 解析期展开，必须触发生成器重扫）"
+  else
+    ok "$SRC_ADDED 个 .c 内容更新；集合未变 → 不 touch Makefile（避免全量重编）"
   fi
 else
   dim "content/src/ 为空 —— 无原创 C 代码可铺设（M1 阶段正常）"
@@ -808,10 +951,28 @@ if [ -n "$FONT_PATCH" ]; then
   if [ "$DRY_RUN" = "1" ]; then
     act "[预演] 解包字库补丁 → 框架：$(basename "$FONT_PATCH")"
   else
-    if tar xzf "$FONT_PATCH" -C "$FRAMEWORK_DIR" 2>/dev/null; then
-      FONT_N="$(tar tzf "$FONT_PATCH" 2>/dev/null | grep -c . || echo 0)"
-      ok "字库补丁已铺设：$FONT_N 项（$(basename "$FONT_PATCH")）"
+    # 内容感知同步（2026-09-27）：旧实现 `tar xzf … -C 框架` 会**无条件重写 26 个文件**，
+    # 其中含 graphics/fonts/cjk/*（CJK 字库 .2bpp/.u8）—— mtime 一变，字库对象全量重编。
+    # 现在先解到临时目录，逐文件比对，只有真的不同才落盘。
+    FONT_TMP="$(mktemp -d)"
+    if tar xzf "$FONT_PATCH" -C "$FONT_TMP" 2>/dev/null; then
+      FONT_N=0; FONT_SAME=0
+      while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        if [ -f "$FRAMEWORK_DIR/$rel" ] && cmp -s "$FONT_TMP/$rel" "$FRAMEWORK_DIR/$rel"; then
+          FONT_SAME=$((FONT_SAME+1)); continue
+        fi
+        mkdir -p "$(dirname "$FRAMEWORK_DIR/$rel")" 2>/dev/null
+        cp -f "$FONT_TMP/$rel" "$FRAMEWORK_DIR/$rel" && FONT_N=$((FONT_N+1))
+      done < <(cd "$FONT_TMP" && find . -type f | sed 's|^\./||')
+      rm -rf "$FONT_TMP"
+      if [ "$FONT_N" -eq 0 ]; then
+        ok "字库补丁：$FONT_SAME 项全部与框架一致 → 0 项落盘（保 mtime，不触发重编）"
+      else
+        ok "字库补丁已铺设：$FONT_N 项变更 / $FONT_SAME 项一致（$(basename "$FONT_PATCH")）"
+      fi
     else
+      rm -rf "$FONT_TMP"
       bad "字库补丁解包失败：$FONT_PATCH"
     fi
   fi
@@ -860,33 +1021,81 @@ if [ -n "$FRAMEWORK_PATCHES" ]; then
       rm -f "$junk" && dim "清障：已删除残留 ${junk#$FRAMEWORK_DIR/}"
     done < <(cd "$FRAMEWORK_DIR" && find include src tools -type f \( -name '*.rej' -o -name '*.orig' \) 2>/dev/null | sed "s|^|$FRAMEWORK_DIR/|")
 
-    # 阶段 1：每个目标文件只还原一次
-    while IFS= read -r t; do
-      [ -n "$t" ] || continue
-      if ! ( cd "$FRAMEWORK_DIR" && git checkout HEAD -- "$t" ) 2>/dev/null; then
-        die "[补丁] 无法还原 $t（文件不存在或不在 git 追踪内）"
-      fi
-    done <<< "$PATCH_TARGETS"
-
-    # 阶段 2：按序 apply（文件已还原，此处不再 checkout）
+    # 阶段 1：判定每个补丁的**当前状态**（只做 dry-run，不碰框架文件）
+    #   · 正向可应用（patch --dry-run 成功）    → 待应用 PENDING
+    #   · 反向可应用（patch -R --dry-run 成功） → 已在位（上次构建的成果还在）
+    #   · 两者都失败                            → 上下文已变，必须人工 rebase
+    # ★ 2026-09-27 新增这条"已在位"快路径：旧实现每次都 checkout + apply，
+    #   目标文件（含 include/bmitem.h 这类被广泛包含的头）mtime 一刷新就全量重编。
+    #   零内容变更的二次构建因此也要 6 分钟 —— 这是本次提速的两大来源之一
+    #   （另一个是 3c 的 touch Makefile）。
+    PENDING=""
     while IFS= read -r p; do
       [ -n "$p" ] || continue
       name="$(basename "$p")"
-      target="$(grep -m1 '^+++ b/' "$p" | sed 's|^+++ b/||')"
-      if [ -z "$target" ]; then
-        die "[补丁] $name 解析不出目标文件（缺 '+++ b/<path>' 行）"
-      fi
-      if ( cd "$FRAMEWORK_DIR" && patch -p1 -N --no-backup-if-mismatch -i "$p" ) >> "$REPORT" 2>&1; then
-        ok "[补丁] $name 已应用 → $target"
-        PATCH_N=$((PATCH_N+1))
+      if ( cd "$FRAMEWORK_DIR" && patch -p1 -N --dry-run --no-backup-if-mismatch -i "$p" ) >/dev/null 2>&1; then
+        PENDING="$PENDING$p"$'\n'
+      elif ( cd "$FRAMEWORK_DIR" && patch -p1 -R --dry-run --no-backup-if-mismatch -i "$p" ) >/dev/null 2>&1; then
+        dim "[补丁] $name 已在位（反向 dry-run 通过）"
       else
-        bad "[补丁] $name 应用失败 —— 上游可能已改动该文件上下文，或与同文件其它补丁的上下文重叠"
-        die "框架补丁无法应用，需人工 rebase（见 docs/6 §3.4g）"
+        bad "[补丁] $name 既不能正向应用、也不能反向应用"
+        dim "· 上游上下文可能已变（框架 commit 漂移？）"
+        dim "· 或与同文件其它补丁的上下文重叠"
+        die "框架补丁状态无法判定，需人工 rebase（见 docs/6 §3.4g）"
       fi
     done <<< "$FRAMEWORK_PATCHES"
 
-    [ "$PATCH_N" -eq "$n_patches" ] \
-      || die "[补丁] 预期应用 $n_patches 个，实际只应用 $PATCH_N 个 —— 有补丁被静默跳过"
+    n_pending="$(printf '%s' "$PENDING" | sed '/^$/d' | wc -l | tr -d ' ')"
+    if [ "$n_pending" -eq 0 ]; then
+      ok "全部 $n_patches 个框架补丁已在位 → 跳过 checkout/apply（保 mtime ⇒ 不触发重编）"
+      PATCH_N=$n_patches
+    else
+      # 阶段 2：只还原「有待应用补丁的目标文件」，每个目标只还原一次
+      RESTORE_TARGETS="$(printf '%s' "$PENDING" | sed '/^$/d' | while IFS= read -r p; do
+          grep -m1 '^+++ b/' "$p" 2>/dev/null | sed 's|^+++ b/||'
+        done | sed '/^$/d' | sort -u)"
+      while IFS= read -r t; do
+        [ -n "$t" ] || continue
+        ( cd "$FRAMEWORK_DIR" && git checkout HEAD -- "$t" ) 2>/dev/null \
+          || die "[补丁] 无法还原 $t（文件不存在或不在 git 追踪内）"
+        dim "[补丁] 已还原 $t（确定 apply 起点）"
+      done <<< "$RESTORE_TARGETS"
+
+      # 阶段 3：重放**这些目标上的全部补丁** —— 含阶段 1 判为"已在位"的那些：
+      #   它们刚被阶段 2 的还原抹掉了，不重放就会**静默丢补**。
+      #   （这正是"两阶段"设计的核心：不能只重放 PENDING 的那几个。）
+      while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        name="$(basename "$p")"
+        target="$(grep -m1 '^+++ b/' "$p" 2>/dev/null | sed 's|^+++ b/||')"
+        [ -n "$target" ] || die "[补丁] $name 解析不出目标文件（缺 '+++ b/<path>' 行）"
+        case "$(printf '%s\n' "$RESTORE_TARGETS")" in
+          *"$target"*) ;;                 # 该目标被还原过 → 必须重放
+          *) continue ;;                  # 目标未动 → 保持"已在位"
+        esac
+        if ( cd "$FRAMEWORK_DIR" && patch -p1 -N --no-backup-if-mismatch -i "$p" ) >> "$REPORT" 2>&1; then
+          ok "[补丁] $name 已重放 → $target"
+        else
+          bad "[补丁] $name 重放失败 —— 上游可能已改动该文件上下文，或与同文件其它补丁的上下文重叠"
+          die "框架补丁无法应用，需人工 rebase（见 docs/6 §3.4g）"
+        fi
+      done <<< "$FRAMEWORK_PATCHES"
+    fi
+
+    # 阶段 4：**终态复核**（比"数数"更强的门禁）
+    #   旧实现只校验「应用数 == 预期数」——但计数由循环自己维护，
+    #   一旦某次 continue 静默跳过，计数与事实同时错、互相掩盖。
+    #   改为对每个补丁跑**反向 dry-run**：能反向应用 ⇔ 确认它确实在位。
+    n_notinplace=0
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      if ! ( cd "$FRAMEWORK_DIR" && patch -p1 -R --dry-run --no-backup-if-mismatch -i "$p" ) >/dev/null 2>&1; then
+        bad "[补丁] $(basename "$p") 终态复核失败：不在位"
+        n_notinplace=$((n_notinplace+1))
+      fi
+    done <<< "$FRAMEWORK_PATCHES"
+    [ "$n_notinplace" -eq 0 ] || die "[补丁] $n_notinplace 个补丁未处于「已应用」终态 —— 有补丁被静默丢弃"
+    PATCH_N=$n_patches
   fi
   [ "$DRY_RUN" = "1" ] || warn "★ 已应用 $PATCH_N 个框架补丁 / $n_targets 个目标文件 —— 本项目【已知偏离】，升级框架时必须重新评估"
 else
@@ -923,19 +1132,154 @@ else
   ok "宿主机工具就绪"
 
   BUILD_LOG="$LOG_DIR/build-$STAMP.log"
+  PROG_FILE="$LOG_DIR/.build-progress"
+  : > "$BUILD_LOG"
+  : > "$PROG_FILE"
+
   if [ -n "$MAKE_VARS" ]; then
-    act "make $MAKE_TARGET $MAKE_VARS（日志：$BUILD_LOG）"
+    act "make $MAKE_TARGET $MAKE_VARS"
   else
-    act "make $MAKE_TARGET（日志：$BUILD_LOG）"
+    act "make $MAKE_TARGET"
   fi
-  dim "首次/改表后编译较慢，请耐心…"
-  ( cd "$FRAMEWORK_DIR" && make "$MAKE_TARGET" $MAKE_VARS ) > "$BUILD_LOG" 2>&1
-  RC=$?
+  dim "完整日志：$BUILD_LOG"
+  dim "控制台只显示进度里程碑 + 编译计数（每 25 个源文件）+ 警告/错误，其余过滤"
+  dim "每 20 秒一次心跳：已运行时长 / 日志静默时长 / 当前进度"
+  dim "背景知识：框架自身**没有**任何 (n/m) 进度输出（实测原始日志仅 1 条计数行），"
+  dim "          所以编译器调用次数是我们自己合成的进度信号（全量约 492 个 .c）"
+  dim "每次完整构建都会全量重编 492 个 .c（≈220s）。原因已查明但**未修复**："
+  dim "          框架 5 组生成物挂在 phony FORCE_* 目标上，见 docs/5 §9.0 第 10 条"
+
+  # 超时兜底（2026-09-27 新增）：构建**不许无限期挂着**。
+  #   教训：第 5 步 ④ 曾因 `timeout` 不带 `-k` 而无限等待（mgba 捕获 SIGTERM 不退出），
+  #   实测卡 16 分钟。此处对 make 也上双保险：`-k 15` 保证 15 秒后 SIGKILL 收尾。
+  #   默认 30 分钟，可用 BUILD_TIMEOUT=<秒> 覆盖。
+  BUILD_TIMEOUT="${BUILD_TIMEOUT:-1800}"
+  BUILD_START="$(date +%s)"
+
+  # 心跳：日志静默时长是区分「在跑」与「卡住」的唯一客观判据。
+  #   进度来源是 awk 阶段写出的 $PROG_FILE（不能 tail 原始日志：末行常是
+  #   gcc 命令行或箭头行，对用户没有任何信息量）。
+  (
+    while sleep 20; do
+      _now="$(date +%s)"; _el=$((_now - BUILD_START))
+      _last="$(stat -c %Y "$BUILD_LOG" 2>/dev/null || echo "$_now")"
+      _quiet=$((_now - _last))
+      _mark=""
+      if [ "$_quiet" -ge 180 ]; then _mark="  ${c_red}← 疑似卡死（${_quiet}s 无输出）${c_off}"; fi
+      printf "      %s[%4ds] 构建中… 日志静默 %ss │ %s%s%s\n" \
+        "$c_dim" "$_el" "$_quiet" \
+        "$(tail -n1 "$PROG_FILE" 2>/dev/null | tr -d '\r' | cut -c1-72)" "$_mark" "$c_off"
+    done
+  ) &
+  HB_PID=$!
+  trap 'kill "$HB_PID" 2>/dev/null' EXIT
+
+  ( cd "$FRAMEWORK_DIR" && timeout -k 15 "$BUILD_TIMEOUT" make "$MAKE_TARGET" $MAKE_VARS ) 2>&1 \
+    | stdbuf -oL -eL tee "$BUILD_LOG" \
+    | awk -v prog="$PROG_FILE" '
+        # 显式 fflush：awk 的 stdout 是管道（非 tty）时默认**块缓冲**，
+        # 实测进度要到 60s 后首块满 4KB 才出现，心跳因此一直读到空进度。
+        function emit(s)  { printf "  %s\n", s; fflush() }
+        function emitp(s) { printf "  %s\n", s; printf "%s\n", substr(s, 1, 110) > prog; fflush() }
+        {
+          line = $0
+          sub(/\r$/, "", line)
+
+          # ① 编译器调用行：既是噪声（一次全量构建 492 条，每条约 1.5KB）也是
+          #    **唯一的进度信号**（框架不发 (n/m)）。抽源文件名，每 25 条打一次。
+          if (line ~ /^"?(\/usr\/bin\/env )?arm-none-eabi-(gcc|g\+\+)/) {
+            cc++
+            want = ""
+            # 注意：这里**不能**用 \b 收尾——gawk 会把 \b 解释成退格符 0x08，
+            # 导致所有匹配失败（实测踩过，表现为全部输出 "(源文件未知)"）。
+            if (match(line, /[A-Za-z0-9_\/.-]*\/[A-Za-z0-9_.-]+\.c/)) {
+              want = substr(line, RSTART, RLENGTH); sub(/^.*\//, "", want)
+            }
+            if (want == "") want = "(源文件未知)"
+            if (cc == 1 || cc % 25 == 0) emitp(sprintf("[编译 %d] %s", cc, want))
+            next
+          }
+          # 其它工具调用行：纯噪声
+          if (line ~ /^"?(\/usr\/bin\/env )?(arm-none-eabi-|python3|\.\/tools\/)/) next
+
+          # ② make 目录进出 / 循环依赖 / 子 make 提示：纯噪声
+          if (line ~ /^make(\[[0-9]+\])?: (Entering|Leaving) directory/) next
+
+          # ③ 形如 (1234/1481) 的计数行：若上游某天加了进度输出，每 50 条或末条打一次
+          if (match(line, /\(([0-9]+)\/([0-9]+)\)/)) {
+            seg = substr(line, RSTART+1, RLENGTH-2)
+            split(seg, a, "/")
+            n = a[1] + 0; m = a[2] + 0
+            if (m > 0 && (n == m || n % 50 == 0)) emit(sprintf("[%d/%d] %s", n, m, substr(line, 1, 118)))
+            next
+          }
+
+          # ④ warning / error：必须排在"诊断上下文行"规则之前，否则 warning 正文
+          #    行（形如 src/x.c:39:19: warning: ...）会先被当作诊断行丢掉。
+          if (line ~ /warning:/) { w++; if (w <= 6) emit(sprintf("! %s", substr(line, 1, 138))); next }
+          if (line ~ /error:|Error [0-9]+|\*\*\* \[/) { e++; emit(sprintf("X %s", substr(line, 1, 158))); next }
+
+          # ⑤ "已是最新 / 跳过"：计数，不打行（实测一次全量构建 ~500 行）
+          if (line ~ /(^up to date: |^up-to-date |)is up to date\.$/) { upto++; next }
+          if (line ~ /^up to date: /) { upto++; next }
+          if (line ~ /^up-to-date /) { upto++; next }
+          if (line ~ /Circular .* dependency dropped\.$/) { circ++; next }
+          if (line ~ /^make\[[0-9]+\]: /) next
+
+          # ⑥ 编译器诊断的上下文/引用行：整类丢弃。GCC 13/14 的现代诊断格式会成片
+          #    输出（实测一次全量构建 ~5000 行），它们不提供进度信息：
+          #      "In file included from ..."      / "In function 'x',"
+          #      "    inlined from ..."           / "src/x.c: In function 'y':"
+          #      "src/x.c: At top level:"         / "include/z.h:869:61: note: ..."
+          #      "   13 |  code"  / "      |  ^~~" / "                   from x.h:8,"
+          if (line ~ /^In (function|file|member|constructor|destructor|lambda) /) next
+          if (line ~ /^ *inlined from /) next
+          if (line ~ /note:/) next
+          if (line ~ /: In function /) next
+          if (line ~ /: At top level:$/) next
+          if (line ~ /^ *from [A-Za-z0-9_\/.-]+:[0-9]/) next
+          if (line ~ /Assembler messages:$/) next
+          if (line ~ /^ *[0-9]+ \|/) next
+          if (line ~ /^ *\|/) next
+          if (line ~ /^ *\^/) next
+          if (line ~ /^ *~/) next
+          if (line ~ /^[A-Za-z0-9_.\/-]+\.(c|h|cc|cpp|S|s):[0-9]+(:[0-9]+)?:/) next
+          # 生成器多行参数续行（以 Tab 或对齐空格起首的 --xxx 参数）
+          if (line ~ /^[ \t]+--[a-z-]+ /) next
+          if (line ~ /^[ \t]+--[a-z-]+$/) next
+
+          # ⑦ 其余（阶段里程碑 / OK: / 链接 / ROM 头 / 其它）：原样但截断
+          if (line ~ /^[ \t]*$/) next
+          emitp(substr(line, 1, 160))
+        }
+        END {
+          emit(sprintf("---- 编译汇总：%d 个 .c 已编译、%d 个目标已最新、%d 条循环依赖、%d 条警告、%d 条错误 ----", cc + 0, upto + 0, circ + 0, w + 0, e + 0))
+          printf "[完成] 编译 %d 个 .c / 警告 %d / 错误 %d\n", cc + 0, w + 0, e + 0 > prog
+          fflush()
+        }'
+  RC=${PIPESTATUS[0]}
+
+  kill "$HB_PID" 2>/dev/null
+  trap - EXIT
+  BUILD_SECS=$(( $(date +%s) - BUILD_START ))
+
   if [ $RC -eq 0 ]; then
-    ok "构建成功"
-  else
-    bad "构建失败（exit $RC）"
+    ok "构建成功（耗时 ${BUILD_SECS}s）"
+  elif [ $RC -eq 124 ] || [ $RC -eq 137 ]; then
+    bad "构建超时（exit $RC，上限 ${BUILD_TIMEOUT}s）—— 疑似卡死"
     dim "最后 25 行日志："
+    tail -25 "$BUILD_LOG" | sed 's/^/      /'
+    dim "完整日志：$BUILD_LOG"
+    die "构建超时，未进行后续验证（可加大 BUILD_TIMEOUT=<秒> 后重试）"
+  else
+    bad "构建失败（exit $RC，耗时 ${BUILD_SECS}s）"
+    # 失败时先给"可读的失败摘要"，再给原始尾部（原始尾部常是箭头行/命令行，不可读）
+    _ERRS="$(grep -nE 'error:|\*\*\* |Error [0-9]+|undefined reference|No rule to make' "$BUILD_LOG" | tail -25)"
+    if [ -n "$_ERRS" ]; then
+      dim "错误相关行（最多 25 条）："
+      printf '%s\n' "$_ERRS" | sed 's/^/      /'
+    fi
+    dim "原始日志最后 25 行："
     tail -25 "$BUILD_LOG" | sed 's/^/      /'
     dim "完整日志：$BUILD_LOG"
     die "构建失败"
@@ -974,33 +1318,85 @@ else
     die "③ header 错误：'$TITLE' / '$CODE'（期望 '$TITLE_EXPECT' / '$CODE_EXPECT'）"
   fi
 
-  # ④ 可引导（mGBA 无头启动，不比对像素）
-  # ⚠️ 2026-09-27 修正：Ubuntu 24.04 的 `mgba-sdl` 包提供的二进制名是 **`mgba`**
-  #    （不叫 `mgba-sdl`），旧检查永远落空 ⇒ 本项被静默跳过，"五项自检"实际只跑四项。
-  #    现在按候选列表逐个探测（含 /usr/games，因非登录 shell 可能不带该路径）。
-  MG=""
-  for cand in "$(command -v mgba-sdl 2>/dev/null)" "$(command -v mgba 2>/dev/null)" \
-              /usr/games/mgba-sdl /usr/games/mgba; do
-    [ -n "$cand" ] && [ -x "$cand" ] && { MG="$cand"; break; }
-  done
-  if [ -n "$MG" ]; then
-    timeout 12 "$MG" -l 0 -C "frames=60" "$FRAMEWORK_ROM" >/dev/null 2>&1
-    RC=$?
-    if [ $RC -eq 0 ] || [ $RC -eq 124 ]; then
-      ok "④ 可引导（$(basename "$MG") 跑 60 帧无崩溃）"
+  # ④ 可引导（无头采集，不比对像素）
+  # ⚠️ 2026-09-27 **二次**修正 —— 本项前后踩了同一个坑的两层：
+  #   1) Ubuntu 24.04 的 apt 包 `mgba-sdl` 提供的二进制名是 **`mgba`**（不叫 `mgba-sdl`），
+  #      旧写法 `command -v mgba-sdl` 永远落空 ⇒ 本项被静默跳过，"五项自检"实际只跑四项。
+  #   2) 修好探测后暴露更严重的：`timeout 12 mgba -l 0 -C frames=60 <rom>` **永久挂起**。
+  #      根因（实测）：mgba 注册了 SIGTERM 处理器（/proc/<pid>/status 的 SigCgt 含 bit15），
+  #      收到 TERM 后不退出，而 `timeout` **不带 `-k`** 就无限期等下去。
+  #      实测对照：`timeout 12 …` 卡住 16 分钟未返回；`timeout -k 3 10 …` 10 秒按时结束。
+  #      且 `-C frames=60` 对 mgba-sdl 无效（它不会跑满 60 帧自己退出）——
+  #      这条路径无论如何都只能靠超时强杀，**"跑完了没有"根本没有证据**。
+  #   3) 因此改用**框架自带的无头通道** `tools/gba-playtest/gba_playtest.py capture`
+  #      —— 与上游 boot-check 同一后端：真无头、约 2 秒完成、rc=0 才算数。
+  #      它**只采集不比对**指纹，所以不会因中文化而误报（这正是第 5 步不用
+  #      `expansion-modern-boot-check` 的原因，见 docs/6 §3.1）。
+  #   4) 附带好处：采集 JSON 里带模拟器**自读**的 rom.sha1/size/title/game_code，
+  #      可交叉核对 ②③ —— 比 `dd` 读头上更强（那是另一条独立路径的读数）。
+  BOOT_JSON="$(mktemp -t shanhe-boot-XXXXXX.json 2>/dev/null)"
+  BOOT_RC=127
+  if [ -f "$FRAMEWORK_DIR/tools/gba-playtest/gba_playtest.py" ] && \
+     [ -f "$FRAMEWORK_DIR/tools/gba-playtest/scenarios/boot.json" ]; then
+    ( cd "$FRAMEWORK_DIR" && timeout -k 5 120 python3 tools/gba-playtest/gba_playtest.py capture \
+        --rom "$ROM_REL" \
+        --scenario tools/gba-playtest/scenarios/boot.json \
+        --output "$BOOT_JSON" ) >/dev/null 2>&1
+    BOOT_RC=$?
+  fi
+  BOOT_SUM=""; PY_RC=0
+  if [ "$BOOT_RC" = "0" ] && [ -s "$BOOT_JSON" ]; then
+    # 退出码语义：3=检查点不足 4=尺寸不符 5=title/game_code 不符 6=三帧画面全同
+    BOOT_SUM="$(python3 - "$BOOT_JSON" "$ROM_BYTES" "$TITLE_EXPECT" "$CODE_EXPECT" <<'PY' 2>/dev/null
+import json, sys
+path, want_size, want_title, want_code = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+d = json.load(open(path))
+rom, cps = d.get("rom", {}), d.get("checkpoints", [])
+if len(cps) < 3: sys.exit(3)
+if rom.get("size") != want_size: sys.exit(4)
+if rom.get("title") != want_title or rom.get("game_code") != want_code: sys.exit(5)
+# 负向测试发现（2026-09-27）：截断成 1MB 的 ROM 喂给 capture 仍返回 rc=0，
+# 三个检查点的 framebuffer_hash 全部相同（画面从未推进）。只信 rc 会被骗过。
+if cps[0].get("framebuffer_hash") == cps[-1].get("framebuffer_hash"): sys.exit(6)
+print("%s|%d" % (str(rom.get("sha1", "?"))[:8], len(cps)))
+PY
+)"
+    PY_RC=$?
+  fi
+  if [ -n "$BOOT_SUM" ]; then
+    ok "④ 可引导（官方无头采集：${BOOT_SUM##*|} 个检查点跑通、画面确有推进，ROM ${BOOT_SUM%%|*}；模拟器自读 size/title/code 与 ②③ 一致；不比对像素）"
+  elif [ "$BOOT_RC" = "127" ]; then
+    warn "④ 未找到框架无头采集工具（tools/gba-playtest/…）—— 跳过（Windows 侧用 mGBA 目视）"
+  elif [ "$BOOT_RC" != "0" ]; then
+    warn "④ 无头采集未通过（rc=$BOOT_RC）—— 建议 Windows 侧用 mGBA 目视确认"
+  else
+    warn "④ 采集输出校验失败（python rc=$PY_RC：3=检查点不足 4=尺寸不符 5=header 不符 6=三帧画面全同/疑似卡死）"
+  fi
+  rm -f "$BOOT_JSON" 2>/dev/null
+
+  # ⑤ 中文 locale 资源**真的**进 ROM 了吗
+  # ⚠️ 2026-09-27 加强：旧写法只断言 `ROM 尺寸 > 20000000` —— 但 ② 已经断言过尺寸，
+  #    于是 ⑤ 变成同义反复（"32M ⇒ 一定有中文"是**推断**，不是**证据**：
+  #    只要 pad 到 32M 就会通过，哪怕 locale 资源一个字都没链进去）。
+  #    改为直接查 ELF 的 `.locale_data` 段，并回到 ROM 里读该偏移的字节：
+  #    该段落在 0x09000000（= 16MB 边界之后的上位 ROM bank，即框架所说的
+  #    "dedicated upper-ROM locale bank"），用 0xFF 填充的空 bank 与真资源可区分。
+  #    实测本机：.locale_data @0x1001000，1,407,972 字节（≈1.4MB，与 docs/5 §3.5 相符）。
+  ELF_PATH="${FRAMEWORK_DIR}/${ROM_REL%.gba}.elf"
+  LOC_SEC=""
+  if [ -f "$ELF_PATH" ] && command -v arm-none-eabi-readelf >/dev/null 2>&1; then
+    LOC_SEC="$(arm-none-eabi-readelf -S "$ELF_PATH" 2>/dev/null | awk '$2==".locale_data"{print $5" "$6; exit}')"
+  fi
+  if [ -n "$LOC_SEC" ]; then
+    LOC_OFF="${LOC_SEC%% *}"; LOC_LEN="${LOC_SEC##* }"
+    LOC_HEAD="$(dd if="$FRAMEWORK_ROM" bs=1 skip=$((16#$LOC_OFF)) count=16 2>/dev/null | od -An -tx1 | tr -d ' \n')"
+    if [ -z "$LOC_HEAD" ] || [ "$LOC_HEAD" = "ffffffffffffffffffffffffffffffff" ]; then
+      warn "⑤ .locale_data 段在 ROM 里是空的（$LOC_LEN 字节全 0xFF）—— 中文本地化资源没链进去，请检查 EXPANSION_ENABLED_LOCALES"
     else
-      warn "④ mGBA 退出码 $RC（可能只是无头模式限制，建议人工目视确认）"
+      ok "⑤ 中文本地化资源已进 ROM：.locale_data @0x$LOC_OFF，$((16#$LOC_LEN)) 字节（首 16 字节 ${LOC_HEAD}）—— 可用 mGBA 目视确认汉字"
     fi
   else
-    warn "④ 未找到 mGBA（已试 mgba-sdl / mgba / /usr/games/*）—— 跳过可引导检查（Windows 侧用 mGBA 目视）"
-  fi
-
-  # ⑤ 中文字形（粗检：ROM 内应含字库段；精检需实机）
-  CN_SIZE="$(stat -c %s "$FRAMEWORK_ROM")"
-  if [ "$CN_SIZE" -gt 20000000 ]; then
-    ok "⑤ 已启用中文（ROM ≥ 32M，含 locale bank）—— 请用 mGBA 目视确认汉字"
-  else
-    warn "⑤ ROM 偏小，可能未启用中文 locale（检查 config.autotools.mk）"
+    warn "⑤ 读不到 .locale_data 段（缺 ELF 或缺 arm-none-eabi-readelf）—— 跳过；建议用 mGBA 目视确认汉字"
   fi
 
   ROM_SHA1="$(sha1sum "$FRAMEWORK_ROM" | cut -c1-8)"
