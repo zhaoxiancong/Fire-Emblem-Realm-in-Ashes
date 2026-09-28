@@ -28,6 +28,20 @@
 set +e
 export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
+# ── 位置参数防呆（2026-09-29 加）──
+# 本脚本的开关**全部是环境变量**。若写成位置参数（`bash tools/shanhe-build.sh RESTORE=1`）
+# 会被**静默忽略** —— 脚本照常跑完整构建："以为在还原/清理，其实在构建"。
+# 这个坑已踩过两次（`PRUNE_ONLY=1`、`RESTORE=1`），故在此硬拦，给出正确写法。
+for _arg in "$@"; do
+  case "$_arg" in
+    [A-Za-z_]*=*)
+      printf '\n  \033[0;31m✗\033[0m 位置参数 "%s" 不会被识别 —— 本脚本的开关都是**环境变量**。\n' "$_arg" >&2
+      printf '    正确写法： \033[0;36m%s bash %s\033[0m\n\n' "$_arg" "$0" >&2
+      exit 2 ;;
+  esac
+done
+unset _arg
+
 # ─────────────────────────── 配置 ───────────────────────────
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCK_FILE="$REPO_ROOT/framework.lock"
@@ -279,22 +293,20 @@ if [ "$RESTORE" = "1" ]; then
   act "git restore --source=HEAD --staged --worktree ."
   git -C "$FRAMEWORK_DIR" restore --source=HEAD --staged --worktree . 2>&1 | sed 's/^/      /' | tee -a "$REPORT"
 
-  # ★ 2026-09-29 新增：法术特效包是「索引里新增、HEAD 里没有」的文件。
-  #   `git restore --source=HEAD` 只把它们**移出索引**，工作区文件仍在 ⇒ LEFT 非空、
-  #   RESTORE 报"未还原"。必须补两步：① `git reset -q` 出索引；② 按包**定向**删目录。
-  #   ⚠️ 不能整目录 `rm -rf graphics/custom_spell/`：框架自带的
-  #      graphics/custom_spell/reference/ 是**它自己的提交内容**，删了反而不干净。
-  act "git reset -q（清索引中的新增项）"
-  git -C "$FRAMEWORK_DIR" reset -q 2>&1 | sed 's/^/      /' | tee -a "$REPORT"
-  if [ -d "$CONTENT_DIR/assets/spells" ]; then
-    while IFS= read -r pkgdir; do
-      [ -n "$pkgdir" ] || continue
-      pkgrel="graphics/custom_spell/$(basename "$pkgdir")"
-      [ -e "$FRAMEWORK_DIR/$pkgrel" ] || continue
-      act "清除法术特效包工作区目录：$pkgrel/"
-      rm -rf "$FRAMEWORK_DIR/$pkgrel" | sed 's/^/      /' | tee -a "$REPORT"
-    done < <(find "$CONTENT_DIR/assets/spells" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
-  fi
+  # ★ 2026-09-29 勘误 + 补既有缺口（隔离仓库实测过，别再凭直觉改）：
+  #   ① 法术特效包（3d 步 `git add` 的"索引里新增、HEAD 里没有"的文件）**不需要**额外处理 ——
+  #      上面那句 `git restore --source=HEAD --staged --worktree .` **本身就会**
+  #      把它们从索引与工作区一并删除。
+  #      （所以**不要**再写 `git reset -q` / 按包 `rm -rf`：那是冗余，且曾让我误判。）
+  #   ② 真正缺的是 `git restore` 管不到的 **untracked** 文件 —— 3b'' 铺的
+  #      `texts/msg_overrides.*.json` 与 3c 铺的 `src/shanhe_*.c` 都是 untracked，
+  #      于是旧实现永远停在"仍有未还原项"，与 M1 验收第 3 条"逐字节还原"不符。
+  #   ⚠️ 只点名这两类**本脚本自己的**产物；绝不 `git clean -fdx` —— build/ 与框架
+  #      自身的未追踪文件都在那儿，一刀切会误删。
+  act "清理本脚本铺设的未追踪残留（3b''/3c 产物）"
+  git -C "$FRAMEWORK_DIR" clean -fdq -- 'src/shanhe_*.c' 'texts/msg_overrides.*.json'
+  git -C "$FRAMEWORK_DIR" clean -nd -- 'src/shanhe_*.c' 'texts/msg_overrides.*.json' \
+    | sed 's/^/      /' | tee -a "$REPORT"
 
   LEFT="$(git -C "$FRAMEWORK_DIR" status --porcelain)"
   if [ -z "$LEFT" ]; then
