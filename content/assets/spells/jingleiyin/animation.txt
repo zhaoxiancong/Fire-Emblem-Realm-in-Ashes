@@ -1,0 +1,12 @@
+# 《山河烬》惊雷引 —— 雷光链（feditor-magic-v1）
+# 帧 0：蓄势（半截电枝）；帧 1：全链爆发。两帧各停 2 tick ⇒ totalFrames = 4。
+# 音效 SF1 属于紧随其后那一帧的边界（即帧 1 起始）。
+/// - Start Animation
+O p- jingleiyin_obj_00.png
+B p- jingleiyin_bg_00.png
+2
+SF1
+O p- jingleiyin_obj_01.png
+B p- jingleiyin_bg_01.png
+2
+~~~
