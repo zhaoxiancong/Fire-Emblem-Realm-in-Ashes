@@ -1682,6 +1682,46 @@ PY
     warn "⑥ 缺 tools/shanhe-namecheck.py —— 跳过（不建议：这类缺陷数值检查抓不到）"
   fi
 
+  # ⑦ HOOKS seam 回归（2026-09-28 新增，M3 验收第 4 条的结项依据）
+  # ⚠️ 这条断言替换的是验收表里那句**不成立**的措辞「HOOKS=0 时战斗数学与原版
+  #    **字节一致**」。两处硬证据推翻了它：
+  #      ① 上游 src/bmbattle.c:514-523 的注释自己写着 "stat identity, **not a
+  #         ROM-byte claim**" —— 框架承诺的是数值恒等，并明确否认字节口径；
+  #      ② 本项目对 bmbattle.c 有**永久**补丁（IA_SHENQI 守卫、破军追击 +3），
+  #         由 HOOKS 开关管不到 ⇒ "与上游字节一致"逻辑上不可能。
+  #    所以改成三条可断言命题（工具头注释有完整推导）：
+  #      A 门在工作：HOOKS=1 时 seam 只在 ComputeBattleUnitStats 里被调 1 次；
+  #      B 门关得死：HOOKS=0 时全表对 ExpansionMechanics* 零引用；
+  #      C 偏离可枚举：HOOKS=0 与**钉住上游**同档编译后，
+  #        C1 ComputeBattleUnitStats 逐字节相同（数值恒等的直接证据）、
+  #        C2 变化的节**恰好等于补丁文件自己声明的那些函数**（双向吻合）。
+  #    取证方式不是重跑构建，而是**重放**日志里那条真实的 arm-none-eabi-gcc
+  #    命令行，并先用 R1「重放对象 == 真实 bmbattle.o 逐字节」自校验配方保真。
+  #    （R-29 的教训：读源码常量不算数，要读构建产物。）
+  #    缺前置（无构建日志 / 无 ARM 工具链）时只 warn 不阻断 —— 本机是有的；
+  #    显式关闭：HOOKS_REGRESSION=0。
+  if [ "${HOOKS_REGRESSION:-1}" = "1" ] && [ -f "$REPO_ROOT/tools/shanhe-hooks-regression.py" ]; then
+    HOOKS_RC=0
+    python3 "$REPO_ROOT/tools/shanhe-hooks-regression.py" \
+      --repo "$REPO_ROOT" --framework "$FRAMEWORK_DIR" --logs-dir "$LOG_DIR" \
+      >> "$REPORT" 2>&1 || HOOKS_RC=$?
+    case "$HOOKS_RC" in
+      0)
+        ok "⑦ HOOKS seam 回归全绿（重放保真 / 门在工作 / 门关得死 / 战斗数值恒等 / 偏离可枚举）"
+        ;;
+      3)
+        warn "⑦ HOOKS seam 回归前置缺失（缺构建日志或 ARM 工具链）—— 跳过；不影响产物正确性"
+        ;;
+      *)
+        bad "⑦ HOOKS seam 回归失败（rc=$HOOKS_RC）"
+        grep -E '✗' "$REPORT" | tail -6 | sed 's/^/      /'
+        die "⑦ 战斗数值恒等的门禁被破坏（见 tools/shanhe-hooks-regression.py 头注释）"
+        ;;
+    esac
+  else
+    warn "⑦ HOOKS seam 回归被跳过（HOOKS_REGRESSION=0 或缺工具）—— M3 验收第 4 条将无凭据"
+  fi
+
   ROM_SHA1="$(sha1sum "$FRAMEWORK_ROM" | cut -c1-8)"
   act "产物 SHA1（前 8 位）：$ROM_SHA1  ·  基线中文版：$(lock_get baseline baseline_cn_rom_sha1)"
   dim "改内容后 SHA1 本就该变 —— 这一步是记录，不是门禁"
