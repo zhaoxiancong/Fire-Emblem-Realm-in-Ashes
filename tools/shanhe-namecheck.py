@@ -55,6 +55,13 @@
                    G9b      ROM 里**第 iconId 个槽位**的 128 字节 == 我们的 PNG，
                             且该声明的符号**正好落在**这个槽位（G9 只证明字节在
                             ROM 某处存在，不证明位置对）；
+                   G3b      iconId 还必须 < 框架 src/icon.c 的 MAX_ICON_COUNT。
+                            该表是 `DrawnIconLookupTable[MAX_ICON_COUNT]`
+                            （`struct IconStruct { u8 References; u8 Index; }`，
+                            每项 2 字节）**按 iconId 直接索引**；iconId 超出即越界
+                            写到相邻变量上。★ G3 只看"blob 声明数"，G3b 才看
+                            "运行期缓存表容量" —— 2026-09-28 的「同一件道具的图标
+                            自己会变」正是 G3 绿、G3b 缺位造成的；
                    G-唯一像 该图标的像素不得与**任何**其它图标完全相同；
                    G-可达   判据来自「被 src/events/ 授予玩家」——没被任何事件
                             脚本发放的道具不要求（也因此**不需要豁免名单**），
@@ -101,6 +108,14 @@ ICON_FW_DIR_REL = "graphics/item_icon"    # 框架侧 PNG 源；同名 .4bpp 由
 VANILLA_ITEMS_REL = "src/data/items.json"
 EVENTS_DIR_REL = "src/events"             # 「已被发放」的可推导判据来源
 ICON_BYTES = 128                          # 16x16 @ 4bpp
+# ★★ 运行时缓存表（不是 blob 声明数！）。
+#   `src/icon.c` 的 `DrawnIconLookupTable[MAX_ICON_COUNT]` 按 iconId **直接索引**，
+#   每项 `struct IconStruct { u8 References; u8 Index; }` = 2 字节。
+#   iconId >= MAX_ICON_COUNT ⇒ 越界写到紧随其后的变量上（实测落在
+#   `sLocalizedFontMissingGlyphCount`）⇒ 图标缓存读到别的变量当槽号，图标自己会变。
+#   G3 只保证"blob 里有这一条"，G3b 才保证"运行期表能索引到它"。
+ICON_CACHE_SOURCE_REL = "src/icon.c"
+MAX_ICON_COUNT_RE = re.compile(r"#\s*define\s+MAX_ICON_COUNT\s+(\d+)")
 # ★ 与框架 scripts/generated_data/items/schema.py 的 _ITEM_ICON_ENTRY_RE **同口径**：
 #   只匹配 .4bpp 的 INCBIN_U8 声明 ⇒ 天然排除 item_icon_palette[]（.agbpal）
 #   与 item_icon_tiles（extern alias，不是自己的 INCBIN 声明）。
@@ -252,6 +267,16 @@ def vanilla_icon_ids_from(text):
 
 def vanilla_icon_ids(path):
     return vanilla_icon_ids_from(read_text(path))
+
+
+def parse_max_icon_count_from(text):
+    """从 src/icon.c 抠出 `#define MAX_ICON_COUNT <n>`；抠不到返回 None。"""
+    m = MAX_ICON_COUNT_RE.search(text)
+    return int(m.group(1)) if m else None
+
+
+def parse_max_icon_count(path):
+    return parse_max_icon_count_from(read_text(path))
 
 
 def reachable_item_symbols(framework):
@@ -423,6 +448,15 @@ def self_test():
         '{"item":"ITEM_SWORD_IRON","iconId":8}]}')
     cases.append(("vanilla_icon_ids 同 iconId 归并",
                   vid[8] == ["ITEM_SWORD_RAPIER", "ITEM_SWORD_IRON"] and vid[0] == ["ITEM_NONE"]))
+
+    # 运行期图标缓存表上限（G3b 依赖；写法变了必须**显式失败**而不是静默放行）
+    cases.append(("MAX_ICON_COUNT 解析：vanilla 写法",
+                  parse_max_icon_count_from("#define MAX_ICON_COUNT 224") == 224))
+    cases.append(("MAX_ICON_COUNT 解析：容忍多余空白",
+                  parse_max_icon_count_from("#  define   MAX_ICON_COUNT   256\n") == 256))
+    cases.append(("MAX_ICON_COUNT 抠不到时返回 None（不得误判为 0 或放行）",
+                  parse_max_icon_count_from("#define MAX_ICONS 224") is None
+                  and parse_max_icon_count_from("") is None))
 
     # 多行文本的最大行宽（描述用）
     cases.append(("max_line_width 取最大行",
@@ -821,6 +855,18 @@ def main():
     if not decls:
         ck.die("G1 从 %s 解析不出任何 .4bpp 声明" % ICON_SOURCE_REL)
 
+    # ★★ 运行期缓存表容量 —— 与「blob 声明数」是**两个不同的上界**。
+    #   2026-09-28：G3 用声明数（当时 224）放行了 iconId=224，而缓存表也是 224 项
+    #   ⇒ 越界 2 字节覆写 sLocalizedFontMissingGlyphCount ⇒ 图标自己会变。
+    cache_path = os.path.join(framework, ICON_CACHE_SOURCE_REL)
+    if not os.path.isfile(cache_path):
+        ck.die("G3b 找不到 %s —— 无法证明 iconId 落在图标缓存表内，拒绝放行"
+               % cache_path)
+    max_icon_count = parse_max_icon_count(cache_path)
+    if not max_icon_count or max_icon_count <= 0:
+        ck.die("G3b 从 %s 解析不出 `#define MAX_ICON_COUNT <n>` —— 本检查依赖它"
+               "（若上游改了写法，需同步 %s 的正则）" % (ICON_CACHE_SOURCE_REL, __file__))
+
     vanilla_path = os.path.join(framework, VANILLA_ITEMS_REL)
     vanilla_icons = vanilla_icon_ids(vanilla_path) if os.path.isfile(vanilla_path) else {}
 
@@ -838,6 +884,16 @@ def main():
             ck.die("G3 0x%02X 的 iconId=%d 超出 %s 的 %d 条 .4bpp 声明"
                    "（框架 schema.py 的 read_item_icon_count() 就是这个上界）"
                    % (item_id, ic, ICON_SOURCE_REL, len(decls)))
+        # ★★ G3b：还要落在**运行期缓存表**内。声明数够 ≠ 表够大。
+        if ic >= max_icon_count:
+            ck.die("G3b 0x%02X 的 iconId=%d 超出 %s 的 MAX_ICON_COUNT=%d —— "
+                   "`DrawnIconLookupTable` 按 iconId 直接索引（每项 2 字节），"
+                   "越界会覆写紧随其后的 %s（0x%02X 项 × 2 B = 表尾 0x%X）；"
+                   "实测症状：同一件道具的**图标自己会变**（缓存槽号被那个变量带跑）。"
+                   "修法见 content/framework-patch/shanhe-item-icon-cache.patch"
+                   % (item_id, ic, ICON_CACHE_SOURCE_REL, max_icon_count,
+                      "sLocalizedFontMissingGlyphCount", max_icon_count,
+                      max_icon_count * 2))
         if ic in seen:
             ck.die("G3 0x%02X 与 0x%02X 共用 iconId=%d —— 两个道具会画成同一张图"
                    % (item_id, seen[ic], ic))
@@ -856,6 +912,32 @@ def main():
     #    原版 206 条记录里大量共用同一 iconId（iconId 0 就有 20 条）。
     ck.ok("G 图标槽位：%d 个扩展道具的 iconId %s 互不重复、且都不与原版 %d 个 iconId 撞车"
           % (len(icons), sorted(icons.values()), len(vanilla_icons)))
+    ck.ok("G3b 图标缓存表：%s 的 MAX_ICON_COUNT=%d > 最大 iconId %d"
+          "（表按 iconId 直接索引，越界会写到相邻变量上）"
+          % (ICON_CACHE_SOURCE_REL, max_icon_count,
+             max(icons.values()) if icons else -1))
+
+    # ★★ G3c：上界还必须在**已构建的产物**里成立 —— 读 ELF 里那张表的真实尺寸。
+    #   只查框架源文件不够：补丁没被真正应用时，源码已是 256、ROM 里却仍是 224 项，
+    #   G3b 照样全绿而实机仍然越界。这是 R-28 纪律（读玩家真正读的那一格）的延伸。
+    tbl_addr, tbl_size = nm_symbol(elf_path, "DrawnIconLookupTable")
+    if tbl_addr in ("NO_TOOL", None):
+        ck.die("G3c ELF 里找不到 DrawnIconLookupTable —— 无法证明产物里的缓存表容得下"
+               " iconId %s，拒绝放行" % sorted(icons.values()))
+    if not tbl_size:
+        ck.die("G3c DrawnIconLookupTable 在 ELF 里没有尺寸信息（nm -S 未报）—— "
+               "它可能是 static 被优化掉了；本检查依赖该尺寸，拒绝放行")
+    tbl_cap = tbl_size // 2          # 每项 struct IconStruct = 2 字节
+    for item_id in sorted(icons):
+        if icons[item_id] >= tbl_cap:
+            ck.die("G3c 已构建产物里 DrawnIconLookupTable 只容得下 %d 项"
+                   "（size 0x%X ÷ 2），而 0x%02X 的 iconId=%d 越界 —— "
+                   "补丁 content/framework-patch/shanhe-item-icon-cache.patch "
+                   "没有在本次构建里真正生效"
+                   % (tbl_cap, tbl_size, item_id, icons[item_id]))
+    ck.ok("G3c 产物侧复核：DrawnIconLookupTable size 0x%X ⇒ 可索引 0..%d，"
+          "覆盖最大 iconId %d"
+          % (tbl_size, tbl_cap - 1, max(icons.values()) if icons else -1))
 
     # ★★ G4b：ROM 里 `gItemData[item].iconId` **真的等于**我们声明的值。
     #   这是 R-28 纪律的直接落地 —— 断言的必须是**玩家界面真正读的那一格**。

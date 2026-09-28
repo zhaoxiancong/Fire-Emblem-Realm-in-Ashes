@@ -1,0 +1,42 @@
+# 山河烬 框架补丁: shanhe-item-icon-cache
+#
+# 目标：src/icon.c —— 图标绘制缓存表上限 224 → 256。
+#
+# 为什么必须改：
+#   `DrawnIconLookupTable[MAX_ICON_COUNT]` 是**按 iconId 直接索引**的缓存
+#   （`struct IconStruct { u8 References; u8 Index; }`，每项 2 字节）。
+#   vanilla 共 224 个图标 ⇒ 上限写死 224 ⇒ 合法下标 0..223。
+#   本项目把原创神器「照夜」的 iconId 设为 224（追加在图标 blob 末尾），
+#   于是 `DrawnIconLookupTable[224]` 越界 2 字节，**恰好覆写紧随其后的
+#   `sLocalizedFontMissingGlyphCount`（字库缺字计数器）**。
+#   后果（2026-09-28 实测）：图标缓存把"缺字计数器"当成自己的缓存槽号 ——
+#   计数器一变，图标就画到错的 VRAM 槽位，界面表现为**同一件道具的图标自己会变**。
+#   完整取证见 docs/5 §5.16。
+#
+# 为什么取 256 而不是 225：
+#   `struct ItemData.iconId` 是 **u8** ⇒ 取值域 0..255。表按该域取整数大小，
+#   后续新增神器图标（九鼎等）无需再改这一行。
+#
+# EWRAM 代价：+64 字节（224→256 项 × 2 B）。release 余量 976 B → 912 B。
+#
+# 幂等：`ResetIconGraphics()` 用 `sizeof(DrawnIconLookupTable)` 清零，随尺寸自动正确。
+#       该表是 EWRAM_DATA static，不进存档，无存档兼容问题。
+#
+# 复核（nm -S，本构建）：
+#   改前 DrawnIconLookupTable @0x0203663c size 0x1c0（=448=224×2），
+#        紧随其后 sLocalizedFontMissingGlyphCount @0x020367fc size 0x2  ← 被越界覆写的正是它
+#   改后应为 size 0x200，且不再与任何符号重叠。
+#
+diff --git a/src/icon.c b/src/icon.c
+index c18d2ab..d9e5eaa 100644
+--- a/src/icon.c
++++ b/src/icon.c
+@@ -2,7 +2,7 @@
+ #include "icon.h"
+ #include "hardware.h"
+ 
+-#define MAX_ICON_COUNT 224
++#define MAX_ICON_COUNT 256
+ #define MAX_ICON_GFX_COUNT 32
+ 
+ EWRAM_DATA static struct IconStruct DrawnIconLookupTable[MAX_ICON_COUNT] = {0};
