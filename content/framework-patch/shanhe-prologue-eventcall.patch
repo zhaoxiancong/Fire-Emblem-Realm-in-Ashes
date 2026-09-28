@@ -1,0 +1,68 @@
+# 山河烬 框架补丁: shanhe-prologue-eventcall
+#
+# 目标文件: include/eventcall.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么（2 处，同一文件内）:
+#   ① 补 2 条 `EventScr_*` 声明（山河烬序章的开场/结局）—— 加在既有
+#      `EventScr_Prologue_BeginningScene` 前面。
+#   ② 补 4 条 `UnitDef_ShanheP_*` 声明（章节表通道生成）—— 加在
+#      `#ifndef EVENTCALL_UDEFS_DATA_OWNER` 保护块内（该头文件是本框架的
+#      「跨 TU 符号声明中心」：`EventScr_*` 在一处、`UnitDefinition` 在保护块里）。
+#
+# 依据: docs/4 §M4「序章~第 4 章完整可玩」+ §9.2 M4 明细「切入点 = 序章竖切」；
+#   单位数据由文档 5 §5.18 的章节表通道生成（content/data/shanhe_p_units.json）。
+#   本补丁 = 把「数据」接成「可玩」的那一刀：实测在此之前，四个 UnitDef_ShanheP_*
+#   组符号**全仓无人引用**（数据在 ROM 里但上不了战场）。
+#
+#
+# ★ 两个必须知道的机制（本补丁的判据来源）:
+#   · **胜利条件走原生事件列表**：`.miscBasedEvents` 里 `DefeatBoss(scr)` =
+#     `AFEV(EVFLAG_WIN, scr, EVFLAG_DEFEAT_BOSS)`；而 `EVFLAG_DEFEAT_BOSS` 由
+#     `src/data_battlequotes.c` 的 `gDefeatTalkList` 决定 —— 序章那条是
+#     `{.pid = CHARACTER_ONEILL, .chapter = CHAPTER_L_PROLOGUE, .flag = EVFLAG_DEFEAT_BOSS}`。
+#     山河烬的 BOSS「瘸爷」**沿用了 CHARACTER_ONEILL**（docs/10 §4.2）⇒ 击杀它
+#     天然触发胜利，**不需要**额外接 `chapter_objectives.json`（那张表现在是空的）。
+#   · **`.tutorialEvents` 不能给 NULL 指针**：消费者 `src/eventinfo.c:1279` 是
+#     `for (; tutorialEvents[i] != 0; i++)`，直接解引用 ⇒ 必须给
+#     「只有 NULL 哨兵」的数组（上游同样形状，只是它有 15 个元素）。
+#
+# ⚠️ 已知不圆（有意留，勿当 bug）:
+#   · **教学链先关掉**：上游 15 个教学脚本按 Seth/Eirika 写死（含
+#     `MOVE(0x18, CHARACTER_SETH, ...)`、`FlashCursor(CHARACTER_EIRIKA, ...)`），
+#     换成山河烬的单位后会错位。教学链重写是独立一刀。
+#   · 上游的 `EventScr_Prologue_*` / `EventListScr_Prologue_*` **原样保留**
+#     （未引用但仍编译）：不动它们能让本补丁的 diff 最小、且回退成本为 0。
+#   · 文本仍用上游 message id（0x90D 旁白 / 0x918 战后）—— 山河烬台词待文本通道。
+#   · **站位**是章节表里的占位值，等 ShanheP.tmx 定案后复位。
+#
+# 上游若自行引入「每章一个事件组文件」的机制，本补丁可退化为纯数据。
+# 详见 docs/5 §5.18.8 / docs/10 §4.2。
+#
+diff --git a/include/eventcall.h b/include/eventcall.h
+--- a/include/eventcall.h
++++ b/include/eventcall.h
+@@ -200,6 +200,10 @@
+ extern CONST_DATA EventListScr EventScr_FloorClearInTower[];
+ extern CONST_DATA EventListScr EventScr_WholeTowerClear[];
+ 
++/* 山河烬 · 序章（章节表通道生成 + 自家事件脚本）；实现见 src/shanhe_p_events.c */
++extern CONST_DATA EventListScr EventScr_ShanheP_BeginningScene[];
++extern CONST_DATA EventListScr EventScr_ShanheP_EndingScene[];
++
+ extern CONST_DATA EventListScr EventScr_Prologue_BeginningScene[];
+ extern CONST_DATA EventListScr EventScr_Prologue_RenaisThroneCutscene[];
+ extern CONST_DATA EventListScr EventScr_Prologue_GiveRapier[];
+@@ -940,6 +944,12 @@
+ extern CONST_DATA EventListScr EventScr_Ruin_82[];
+ 
+ #ifndef EVENTCALL_UDEFS_DATA_OWNER
++/* 山河烬 · 序章单位组（章节表通道生成，定义在 src/shanhe_p_udefs.c） */
++extern CONST_DATA struct UnitDefinition UnitDef_ShanheP_Ally[];
++extern CONST_DATA struct UnitDefinition UnitDef_ShanheP_Npc[];
++extern CONST_DATA struct UnitDefinition UnitDef_ShanheP_Enemy[];
++extern CONST_DATA struct UnitDefinition UnitDef_ShanheP_Boss[];
++
+ extern CONST_DATA struct UnitDefinition UnitDef_Event_PrologueAlly[];
+ extern CONST_DATA struct UnitDefinition UnitDef_Event_PrologueEnemy[];
+ extern CONST_DATA struct UnitDefinition UnitDef_Event_PrologueThroneRoomUnits[];

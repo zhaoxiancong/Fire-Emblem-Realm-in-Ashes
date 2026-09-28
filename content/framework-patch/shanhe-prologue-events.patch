@@ -1,0 +1,103 @@
+# 山河烬 框架补丁: shanhe-prologue-events
+#
+# 目标文件: src/events/prologue-eventinfo.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么（2 处，同一文件内）:
+#   ① 新增 3 张山河烬自己的事件列表（Turn / Misc / Tutorial）。
+#   ② 把 `ChapterEventGroup PrologueEvents` 的 **7 处字段**改指我们的实现
+#      （turn / misc / tutorial / playerUnitsInNormal / playerUnitsInHard /
+#        beginningSceneEvents / endingSceneEvents）
+#      ⇒ **进入序章就会加载山河烬的单位与事件脚本**。
+#
+# ⚠️ 为什么这一刀必须落框架文件：章节的「事件列表 → 事件脚本 → 单位组 → 胜利条件」
+#   这条链在框架里是**手写头文件**（本文件被 `src/events_info.c` include），
+#   不是 JSON 表；而 `PrologueEvents` 这个 `ChapterEventGroup` 又被
+#   `src/data/data_8B363C.c` 的 `gChapterDataAssetTable` 按 `chapter_settings.json`
+#   的 `mapEventDataId` 索引 ⇒ 只能改框架文件，属"第 3 类已知偏离"。
+#   **脚本实现**本身不在此列 —— 它落在自家 TU `src/shanhe_p_events.c`
+#   （`$(wildcard src/*.c)` 自动收编）。
+#
+#
+# ★ 两个必须知道的机制（本补丁的判据来源）:
+#   · **胜利条件走原生事件列表**：`.miscBasedEvents` 里 `DefeatBoss(scr)` =
+#     `AFEV(EVFLAG_WIN, scr, EVFLAG_DEFEAT_BOSS)`；而 `EVFLAG_DEFEAT_BOSS` 由
+#     `src/data_battlequotes.c` 的 `gDefeatTalkList` 决定 —— 序章那条是
+#     `{.pid = CHARACTER_ONEILL, .chapter = CHAPTER_L_PROLOGUE, .flag = EVFLAG_DEFEAT_BOSS}`。
+#     山河烬的 BOSS「瘸爷」**沿用了 CHARACTER_ONEILL**（docs/10 §4.2）⇒ 击杀它
+#     天然触发胜利，**不需要**额外接 `chapter_objectives.json`（那张表现在是空的）。
+#   · **`.tutorialEvents` 不能给 NULL 指针**：消费者 `src/eventinfo.c:1279` 是
+#     `for (; tutorialEvents[i] != 0; i++)`，直接解引用 ⇒ 必须给
+#     「只有 NULL 哨兵」的数组（上游同样形状，只是它有 15 个元素）。
+#
+# ⚠️ 已知不圆（有意留，勿当 bug）:
+#   · **教学链先关掉**：上游 15 个教学脚本按 Seth/Eirika 写死（含
+#     `MOVE(0x18, CHARACTER_SETH, ...)`、`FlashCursor(CHARACTER_EIRIKA, ...)`），
+#     换成山河烬的单位后会错位。教学链重写是独立一刀。
+#   · 上游的 `EventScr_Prologue_*` / `EventListScr_Prologue_*` **原样保留**
+#     （未引用但仍编译）：不动它们能让本补丁的 diff 最小、且回退成本为 0。
+#   · 文本仍用上游 message id（0x90D 旁白 / 0x918 战后）—— 山河烬台词待文本通道。
+#   · **站位**是章节表里的占位值，等 ShanheP.tmx 定案后复位。
+#
+# 上游若自行引入「每章一个事件组文件」的机制，本补丁可退化为纯数据。
+# 详见 docs/5 §5.18.8 / docs/10 §4.2。
+#
+diff --git a/src/events/prologue-eventinfo.h b/src/events/prologue-eventinfo.h
+--- a/src/events/prologue-eventinfo.h
++++ b/src/events/prologue-eventinfo.h
+@@ -63,21 +63,41 @@
+     NULL
+ };
+ 
++/* ── 山河烬 · 序章事件列表（shanhe-prologue-events.patch 新增）───────────────
++ * 实现（EventScr_*）在自家 TU src/shanhe_p_events.c。
++ * 教学链先关掉：上游 15 个教学脚本按 Seth/Eirika 写死，换单位后会错位。
++ * ⚠️ .tutorialEvents 的消费者 src/eventinfo.c:1279 是
++ *    `for (; tutorialEvents[i] != 0; i++)` ⇒ **绝不能给 NULL 指针**，
++ *    必须给「只有 NULL 哨兵」的数组（下面这个就是）。 */
++CONST_DATA EventListScr EventListScr_ShanheP_Turn[] = {
++    END_MAIN
++};
++
++CONST_DATA EventListScr EventListScr_ShanheP_Misc[] = {
++    DefeatBoss(EventScr_ShanheP_EndingScene)
++    CauseGameOverIfLordDies
++    END_MAIN
++};
++
++CONST_DATA EventListScr * EventListScr_ShanheP_Tutorial[] = {
++    NULL
++};
++
+ CONST_DATA struct ChapterEventGroup PrologueEvents = {
+-    .turnBasedEvents               = EventListScr_Prologue_Turn,
++    .turnBasedEvents               = EventListScr_ShanheP_Turn,
+     .characterBasedEvents          = EventListScr_Prologue_Character,
+     .locationBasedEvents           = EventListScr_Prologue_Location,
+-    .miscBasedEvents               = EventListScr_Prologue_Misc,
++    .miscBasedEvents               = EventListScr_ShanheP_Misc,
+     .specialEventsWhenUnitSelected = EventListScr_Prologue_SelectUnit,
+     .specialEventsWhenDestSelected = EventListScr_Prologue_SelectDestination,
+     .specialEventsAfterUnitMoved   = EventListScr_Prologue_UnitMove,
+-    .tutorialEvents                = EventListScr_Prologue_Tutorial,
++    .tutorialEvents                = EventListScr_ShanheP_Tutorial,
+ 
+     .traps            = TrapData_Event_Prologue,
+     .extraTrapsInHard = TrapData_Event_PrologueHard,
+ 
+-    .playerUnitsInNormal = UnitDef_Event_PrologueAlly,
+-    .playerUnitsInHard   = UnitDef_Event_PrologueAlly,
++    .playerUnitsInNormal = UnitDef_ShanheP_Ally,
++    .playerUnitsInHard   = UnitDef_ShanheP_Ally,
+ 
+     .playerUnitsChoice1InEncounter = NULL,
+     .playerUnitsChoice2InEncounter = NULL,
+@@ -87,6 +107,6 @@
+     .enemyUnitsChoice2InEncounter = NULL,
+     .enemyUnitsChoice3InEncounter = NULL,
+ 
+-    .beginningSceneEvents = EventScr_Prologue_BeginningScene,
+-    .endingSceneEvents    = EventScr_Prologue_EndingScene,
++    .beginningSceneEvents = EventScr_ShanheP_BeginningScene,
++    .endingSceneEvents    = EventScr_ShanheP_EndingScene,
+ };

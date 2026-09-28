@@ -1223,6 +1223,29 @@ fi
 FRAMEWORK_PATCHES="$(find "$CONTENT_DIR/framework-patch" -maxdepth 1 -type f -name '*.patch' 2>/dev/null | sort)"
 if [ -n "$FRAMEWORK_PATCHES" ]; then
   PATCH_N=0
+  # ★★ 硬拦：一个补丁文件只能有**一个**目标文件（2026-09-28 实测缺陷后新增）
+  #   本脚本在 **5 处**用 `grep -m1 '^+++ b/'` 取补丁目标（写前快照 / 这里的还原清单 /
+  #   阶段 3 的逐补丁目标 / 第 6 步反查白名单）—— `-m1` 只取**第一个**目标。
+  #   ⇒ 写一个改两个文件的补丁**不会报错**，只会**静默漏掉第二个目标**：
+  #      快照少记一个、RESTORE 不还原它、反查把它报成"预期外改动"（三条同时失效）。
+  #   实测现场：shanhe-prologue-wiring.patch（改 eventcall.h + prologue-eventinfo.h）
+  #   在反查里报 `⚠ 预期外改动：src/events/prologue-eventinfo.h`。
+  #   修法 = 拆成两个单目标补丁；本闸保证下次不会再踩（把静默失败变成响亮失败）。
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    # ⚠️ grep -c 在"0 匹配"时也打印 0（只是退出码为 1）⇒ 不能写 `|| echo 0`，
+    #    否则 n_t 变成 "0\n0" 让下面 -ne 比较报 "integer expression expected"
+    n_t="$(grep -c '^+++ b/' "$p" 2>/dev/null)"
+    [ -n "$n_t" ] || n_t=0
+    if [ "$n_t" -ne 1 ]; then
+      bad "[补丁] $(basename "$p") 有 $n_t 个目标文件 —— 本机制**只支持单目标补丁**"
+      dim "原因：脚本 5 处用 \`grep -m1 '^+++ b/'\` 取目标，多目标会被静默漏掉"
+      dim "      （快照少记 / RESTORE 不还原 / 反查误报「预期外改动」）"
+      dim "修法：把该补丁按目标文件拆成多个 .patch（每个一个 '+++ b/' 行）"
+      die "补丁格式不合规：$(basename "$p")（见 docs/5 §5.18.9 / docs/6 §3.4g）"
+    fi
+  done <<< "$FRAMEWORK_PATCHES"
+
   # 去重后的目标清单（同一文件多个补丁只还原一次）
   PATCH_TARGETS="$(while IFS= read -r p; do
       [ -n "$p" ] || continue

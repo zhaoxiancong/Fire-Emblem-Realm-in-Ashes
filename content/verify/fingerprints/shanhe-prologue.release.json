@@ -49,7 +49,7 @@
     },
     {
       "frame": 3000,
-      "framebuffer_hash": "fnv1a64-rgb24:58d01fe7562c1913",
+      "framebuffer_hash": "fnv1a64-rgb24:18250563b1ee149b",
       "name": "prologue-map-loaded",
       "probes": [
         {
@@ -65,7 +65,7 @@
         {
           "address": "gUnitArrayBlue+0x1e",
           "size": 2,
-          "value": "0x1e03"
+          "value": "0x2e01"
         },
         {
           "address": "gUnitArrayBlue+0x68",
@@ -80,13 +80,13 @@
         {
           "address": "sShanheItemNameBuffer+0x00",
           "size": 2,
-          "value": "0x0000"
+          "value": "0x85e7"
         }
       ]
     },
     {
       "frame": 3700,
-      "framebuffer_hash": "fnv1a64-rgb24:bd9fe55af4f566ca",
+      "framebuffer_hash": "fnv1a64-rgb24:e66171cfec419afa",
       "name": "zhaoye-granted",
       "probes": [
         {
@@ -97,12 +97,22 @@
         {
           "address": "gUnitArrayBlue+0x1e",
           "size": 2,
-          "value": "0x1e03"
+          "value": "0x2e01"
+        },
+        {
+          "address": "gUnitArrayBlue+0x20",
+          "size": 2,
+          "value": "0x036c"
+        },
+        {
+          "address": "gUnitArrayBlue+0x22",
+          "size": 2,
+          "value": "0x2dcf"
         },
         {
           "address": "gUnitArrayBlue+0x68",
           "size": 2,
-          "value": "0x2dcf"
+          "value": "0x0000"
         },
         {
           "address": "sCurrentLocale",
@@ -128,8 +138,8 @@
     },
     {
       "frame": 4700,
-      "framebuffer_hash": "fnv1a64-rgb24:78c63f8e7ba3041c",
-      "name": "zhaoye-used-in-tutorial",
+      "framebuffer_hash": "fnv1a64-rgb24:8e8dc37e0f5bfd91",
+      "name": "zhaoye-still-held",
       "probes": [
         {
           "address": "gPlaySt+0x0e",
@@ -137,9 +147,9 @@
           "value": "0x00"
         },
         {
-          "address": "gUnitArrayBlue+0x68",
+          "address": "gUnitArrayBlue+0x22",
           "size": 2,
-          "value": "0x2bcf"
+          "value": "0x2dcf"
         },
         {
           "address": "sCurrentLocale",
@@ -167,7 +177,7 @@
   "format_version": 2,
   "rom": {
     "game_code": "BE8E",
-    "sha1": "10d493d41175f0ead34823589d7e698215a653e5",
+    "sha1": "e2f4eeed49f1d5e8409648c9b70c47fc1c96cce2",
     "size": 33554432,
     "title": "FIREEMBLEM2E"
   },
