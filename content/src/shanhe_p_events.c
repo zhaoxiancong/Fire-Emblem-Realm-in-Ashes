@@ -64,7 +64,7 @@ CONST_DATA EventListScr EventScr_ShanheP_BeginningScene[] = {
      *     —— 该步**不属于** shanhe-build.sh，故不影响本构建；详见 docs/5 §5.18.11。
      *   ★ 显示调用用 `Text_BG(BG_PLAIN_2, …)` —— 上游对这一段就是这么显示的（多页长文本）；
      *     早先一版写成 `BROWNBOXTEXT`（棕色小框）是错的，装不下长文本。 */
-    Text_BG(BG_PLAIN_2, 0x90D)
+    Text_BG(BG_PLAIN_2, 0x90E)
 
     NoFade
     ENDA

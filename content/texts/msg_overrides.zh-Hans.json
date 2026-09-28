@@ -68,6 +68,26 @@
       },
       "reason": "把原版领主职业说明替换为佩剑郎设定（docs/1 §4：剑系低阶，持剑守鼎的少年）。",
       "replacement_text": "持剑守鼎的少年，[LF]均衡而灵动[.][X]"
+    },
+    "0x090E": {
+      "expected_text": "[OpenMidLeft][LoadFace][FID_Seth]\n[OpenMidLeft]Once we cross that bridge, we will[LF]\nbe in Frelia, near Border Mulan.[A][LF]\nLet us proceed, Princess Eirika.[A][X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "序章开场 —— 《山河烬》序章落点（texts.txt:## MSG_90E）",
+        "source_key": "0x08CE"
+      },
+      "reason": "《山河烬》序章台词/旁白（docs/1 §4.3/§4.5）。写成无头像旁白 —— 虞衡立绘槽未定案（docs/9 §3.5）。 有意变更控制码结构，故 preserve_structure=false + sha256 锚定原文。",
+      "replacement_text": "大熙承光元年，冬。[LF]史官记曰：豫州煞疫，[LF]不过数村。[A]没有人记下那一夜的雪有多深，[LF]也没有人记下，[LF]云溪镇的火烧了三天三夜。[A]那一夜，只有一个人[LF]听见了钟声。[X]"
+    },
+    "0x0918": {
+      "expected_text": "[OpenMidLeft][LoadFace][FID_Seth]\n[OpenMidRight][LoadFace][FID_Eirika]\n[OpenMidLeft]Princess, are you injured?[A]\n[OpenMidRight]What?[.][A][LF]\nOh, no[ToggleMouthMove]...[.][ToggleMouthMove][.....][LF]\nI'm fine, Seth.[.][A]\n[OpenMidLeft]But you look so pale[ToggleMouthMove]...[.][ToggleMouthMove][A]\n[OpenMidRight]I'm fine[ToggleMouthMove]... [ToggleMouthMove]Fine.[.][A][LF]\n[ToggleMouthMove]...[.][ToggleMouthMove]This is war, isn't it?[A][LF]\nIt's not at all like the games I used[.][LF]\nto play with my brother or Lyon.[A][LF]\nI never thought[.][ToggleMouthMove]-- [.][ToggleMouthMove]I didn't[LF]\nknow it would be this[.][ToggleMouthMove]...[.][ToggleMouthMove]savage.[.][A][LF]\nAre words useless? Is strength[LF]\nall that matters? It's so sad[.][ToggleMouthMove]...[.][ToggleMouthMove][A][LF]\nWhy would the Grado Empire do this?[.][LF]\nTo what end would they start a war?[.][A]\n[OpenMidLeft]Princess[ToggleMouthMove]...[.][ToggleMouthMove][A]\n[OpenMidRight][ToggleMouthMove]...[.][ToggleMouthMove]Don't worry, Seth. I won't[LF]\ngive in to sorrow.[A][LF]\nLet's get moving.[.][A][LF]\nI'm not broken, and I won't stop[LF]\nuntil I see Renais restored.[A][LF]\nI won't stop until I'm reunited[.][LF]\nwith my father and brother.[.][A][X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "序章战后 —— 《山河烬》序章落点（texts.txt:## MSG_918）",
+        "source_key": "0x08D8"
+      },
+      "reason": "《山河烬》序章台词/旁白（docs/1 §4.3/§4.5）。写成无头像旁白 —— 虞衡立绘槽未定案（docs/9 §3.5）。 有意变更控制码结构，故 preserve_structure=false + sha256 锚定原文。",
+      "replacement_text": "史官记曰：云溪镇破。[LF]守鼎人虞衡重伤，[LF]以玉圭与照夜剑付其子。[A]鼎车北去，长兄护之。[LF]职责与家人，[LF]他选了职责。[X]"
     }
   }
 }

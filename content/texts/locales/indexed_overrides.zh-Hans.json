@@ -62,6 +62,32 @@
       },
       "reason": "把原版领主职业说明替换为佩剑郎设定（docs/1 §4：剑系低阶，持剑守鼎的少年）。",
       "replacement_text": "持剑守鼎的少年，[CTRL:0001]均衡而灵动"
+    },
+    "0x08CE": {
+      "expected_text_sha256": "0ad1732db0d9cf83b20b34107384d755f244acd8563735586f0592ff2497f400",
+      "preserve_structure": false,
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "序章开场 —— 《山河烬》序章落点",
+        "target_ids": [
+          "0x090E"
+        ]
+      },
+      "reason": "《山河烬》序章台词/旁白（docs/1 §4.3/§4.5）。写成无头像旁白 —— 虞衡立绘槽未定案（docs/9 §3.5）。 有意变更控制码结构，故 preserve_structure=false + sha256 锚定原文。",
+      "replacement_text": "大熙承光元年，冬。[CTRL:0001]史官记曰：豫州煞疫，[CTRL:0001]不过数村。[CTRL:0103]没有人记下那一夜的雪有多深，[CTRL:0001]也没有人记下，[CTRL:0001]云溪镇的火烧了三天三夜。[CTRL:0103]那一夜，只有一个人[CTRL:0001]听见了钟声。[CTRL:0003]"
+    },
+    "0x08D8": {
+      "expected_text_sha256": "07271867d2af9b9f4234fea9ab0298ba94066967c45c47a4745b4aa436e3040d",
+      "preserve_structure": false,
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "序章战后 —— 《山河烬》序章落点",
+        "target_ids": [
+          "0x0918"
+        ]
+      },
+      "reason": "《山河烬》序章台词/旁白（docs/1 §4.3/§4.5）。写成无头像旁白 —— 虞衡立绘槽未定案（docs/9 §3.5）。 有意变更控制码结构，故 preserve_structure=false + sha256 锚定原文。",
+      "replacement_text": "史官记曰：云溪镇破。[CTRL:0001]守鼎人虞衡重伤，[CTRL:0001]以玉圭与照夜剑付其子。[CTRL:0103]鼎车北去，长兄护之。[CTRL:0001]职责与家人，[CTRL:0001]他选了职责。[CTRL:0003]"
     }
   }
 }
