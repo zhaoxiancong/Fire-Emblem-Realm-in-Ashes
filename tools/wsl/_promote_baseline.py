@@ -15,6 +15,7 @@
 """
 import hashlib
 import json
+import os
 import struct
 import sys
 from pathlib import Path
@@ -22,7 +23,8 @@ from pathlib import Path
 ROOT = Path.home() / "projects" / "fireemblem8-expansion"
 SRC = ROOT / "graphics" / "fonts" / "cjk"
 BASE = ROOT / "fonts" / "cjk" / "febuilder-baseline"
-NEED = [ord(c) for c in "佩拗耳聪虞郎鸣鼎"]
+CHARS = os.environ.get("SHANHE_FONT_CHARS", "佩拗耳聪虞郎鸣鼎")
+NEED = [ord(c) for c in CHARS]
 STRIDE = 64
 
 
@@ -91,11 +93,17 @@ def main():
         json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8") + b"\n")
     print("manifest.json 已重算")
 
-    # 自检：8 字俱在
+    # 自检：新字必须俱在（★ 原来用 `{prefix}` —— 那是上一个循环的残留变量，恒为最后一个
+    #   style；且只打印不报错。2026-09-28 改为逐 style 指名 + 缺失即失败）
+    bad = []
     for style in ("system", "talk"):
         a, _, _ = load_dir(BASE, f"zh-Hans.{style}")
-        missing = [c for c in NEED if c not in set(a)]
-        print(f"[{prefix}] 自检缺字: {missing or '无'}")
+        missing = [chr(c) for c in NEED if c not in set(a)]
+        print(f"[zh-Hans.{style}] 自检缺字: {missing or '无'}")
+        if missing:
+            bad.append((style, missing))
+    if bad:
+        raise SystemExit(f"基线自检失败：{bad}")
     return 0
 
 

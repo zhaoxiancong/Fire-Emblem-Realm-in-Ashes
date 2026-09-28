@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""临时破环脚本：把 8 个原创汉字码位插入已提交的字库资产（占位字形）。
+"""临时破环脚本：把新码位插入已提交的**运行时**字库资产（占位字形）。
 
 目的：让 collect_inventory 的宽度校验先通过，从而生成语料；
 随后由 FEBuilder 管线用真字体重渲染并覆盖占位字形。
+
+★ 2026-09-28 参数化：字表由环境变量 `SHANHE_FONT_CHARS` 提供，
+  默认仍是首次那 8 个字（佩拗耳聪虞郎鸣鼎）。下一次补字只需：
+     SHANHE_FONT_CHARS="圭州曰煞熙疫" python3 tools/wsl/_inject_glyphs.py
 """
+import os
 import struct
 import sys
 from pathlib import Path
 
 ROOT = Path.home() / "projects" / "fireemblem8-expansion"
 GFX = ROOT / "graphics" / "fonts" / "cjk"
-NEED = [ord(c) for c in "佩拗耳聪虞郎鸣鼎"]
+CHARS = os.environ.get("SHANHE_FONT_CHARS", "佩拗耳聪虞郎鸣鼎")
+NEED = [ord(c) for c in CHARS]
 STRIDE = 64  # 16x16 2bpp -> 16*16/4 = 64 bytes
 
 
@@ -39,7 +45,7 @@ def main():
         )
         missing = [cp for cp in NEED if cp not in arr]
         if not missing:
-            print(f"[{style}] 无需补：8 字俱在")
+            print(f"[{style}] 无需补：{len(CHARS)} 字俱在")
             continue
         # 组装 (cp, width, glyph_blob) 再按 cp 升序合并
         rows = [(cp, w, glyphs[i * STRIDE:(i + 1) * STRIDE])

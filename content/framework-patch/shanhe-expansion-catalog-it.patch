@@ -11,49 +11,27 @@
 #   **registry 里每个 active key 都必须在 ja 与 zh-Hans 的 catalog 里存在**：
 #       expansion_catalogs = {locale: json.load(...)["strings"] for locale in ("ja","zh-Hans")}
 #       "ja": expansion_catalogs["ja"][message["key"]]      # ← KeyError 就在这里
-#   而上游 7 个 catalog 的 key 集**本来一致**（各 145 条）；我们早先的
+#   而上游 7 个 catalog 的 key 集**本来一致**（各 145 条有效键）；我们早先的
 #   `shanhe-expansion-catalog-{en,zh-hans}.patch` 只往 en/zh-Hans 加 3 条
 #   ⇒ ja/de/es/fr/it 各缺 3 条 ⇒ 台账 `KeyError: 'shanhe.item.zhaoye.name'`。
-#   ⚠️ 这个缺陷潜伏了很久：3b' 那一段是**内容感知**的（"内容未变就跳过"），
+#   ⚠️ 这个缺陷潜伏了很久：3b' 那一段是**内容感知**的（「内容未变就跳过」），
 #      不改本地化覆盖就永远不跑台账 ⇒ 一改文案立刻暴露。
+#
+# ★★ 本补丁是**纯文本插入**（2026-09-28 修正）:
+#   上一版用 `json.load` + `json.dumps` 重序列化整文件 ⇒ 把上游**重复出现的 8 个键**
+#   合并成一条并让后值生效 ⇒ 除了我们的 3 条还悄悄改了上游取值，ja 宽度校验随即报错。
+#   ⇒ 现在只在 `strings` 最后一个键之后追加 3 行，其余字节（含重复键、顺序、缩进）保持原样。
 #
 # ⚠️ 文案是**占位**（有意，勿当成品）: 这 5 个 locale **不是本项目目标语言**
 #   （framework.lock `[locales] enabled = en,zh-Hans`）⇒ 直接复用我们自己写的 en 文本，
 #   只为满足「key 必须存在」的结构不变量。**将来若启用这些语言，必须重写本补丁内的正文。**
 #
-# 详见 docs/5 §5.18.10 / docs/6 §3.4g。
+# 详见 docs/5 §5.18.10 / docs/5 §5.18.11 / docs/6 §3.4g。
 #
 diff --git a/texts/expansion/catalog.it.json b/texts/expansion/catalog.it.json
 --- a/texts/expansion/catalog.it.json
 +++ b/texts/expansion/catalog.it.json
-@@ -9,7 +9,7 @@
-     "debug.selector.ephraim": "Ephraim",
-     "debug.selector.unavailable": "Obiettivo non disponibile",
-     "autoplay.charge.label": "Carica",
--    "autoplay.charge.help": "Affida le unità rimaste all'IA per questo turno.",
-+    "autoplay.charge.help": "Affida le unità rimaste\nall'IA per questo turno.",
-     "framework.title": "Framework espansione",
-     "framework.version_label": "Versione:",
-     "framework.build_label": "Build:",
-@@ -102,16 +102,7 @@
-     "debug.save_fixture.preview": "Copia RAM",
-     "debug.save_fixture.title_only": "Solo titolo",
-     "debug.save_fixture.invalid": "Non valida",
--    "debug.save_fixture.blocked": "Salvataggio off"
--,
--    "debug.action.chapter_skirmish": "Capitolo/Schermaglia",
--    "debug.selector.chapter": "Capitolo",
--    "debug.selector.skirmish": "Schermaglia",
--    "debug.selector.eirika": "Eirika",
--    "debug.selector.ephraim": "Ephraim",
--    "debug.selector.unavailable": "Obiettivo non disponibile",
--    "autoplay.charge.label": "Carica",
--    "autoplay.charge.help": "Affida le unità rimaste\nall'IA per questo turno.",
-+    "debug.save_fixture.blocked": "Salvataggio off",
-     "danger_overlay.label": "Pericolo",
-     "danger_overlay.help": "Mostra la portata\nd'attacco nemica.",
-     "debug.view.state": "State",
-@@ -155,6 +146,9 @@
+@@ -155,6 +155,9 @@
      "debug.confirm.green_blocked": "Blocca verde",
      "debug.status.turn": "TURNO",
      "debug.mode.computer": "CPU",
