@@ -932,13 +932,33 @@ sk = patch.get("source_key", "fe8cn_source")
 if sk not in base.get("sources", {}):
     print(f"  framework overrides missing sources.{sk}"); sys.exit(2)
 entries = base["sources"][sk]["entries"]
+# ★ 2026-09-28 修正：原先只放行 4 个字段（expected_text/provenance/reason/replacement_text），
+#   把框架 overrides.py 支持的 expected_text_sha256 / preserve_structure / replacements
+#   **静默丢弃** ⇒ 一旦用到「有意变更控制码结构」的合法写法
+#   （preserve_structure=false + expected_text_sha256），本层就会先报
+#   "missing fields: ['expected_text']" 且原因藏在别处。
+#   修法：① 放行框架 schema 里的全部字段；② 未知字段**硬拦**（防下次再静默丢字段）。
+#   ⚠️ 框架规则见 scripts/localization/game_locales/overrides.py:
+#      expected_text 与 expected_text_sha256 **互斥**；
+#      preserve_structure=false 时**必须**给 sha256（"audited control changes"）。
+PASS_FIELDS = ("expected_text", "expected_text_sha256", "preserve_structure",
+               "provenance", "reason", "replacement_text", "replacements")
 n = 0
 for sid, rec in patch.get("overrides", {}).items():
     key = "0x%04X" % int(sid, 16)
-    missing = [k for k in ("expected_text", "provenance", "reason", "replacement_text") if k not in rec]
+    unknown = sorted(set(rec) - set(PASS_FIELDS))
+    if unknown:
+        print("  override %s has unsupported field(s): %s" % (sid, unknown)); sys.exit(2)
+    missing = [k for k in ("provenance", "reason") if k not in rec]
     if missing:
         print(f"  override {sid} missing fields: {missing}"); sys.exit(2)
-    entries[key] = {k: rec[k] for k in ("expected_text", "provenance", "reason", "replacement_text")}
+    if ("expected_text" in rec) == ("expected_text_sha256" in rec):
+        print("  override %s must have exactly one of expected_text / expected_text_sha256" % sid); sys.exit(2)
+    if ("replacement_text" in rec) == ("replacements" in rec):
+        print("  override %s must have exactly one of replacement_text / replacements" % sid); sys.exit(2)
+    if rec.get("preserve_structure") is False and "expected_text_sha256" not in rec:
+        print("  override %s: preserve_structure=false 需要 expected_text_sha256（框架规则同此）" % sid); sys.exit(2)
+    entries[key] = {k: rec[k] for k in PASS_FIELDS if k in rec}
     n += 1
 # 内容感知（2026-09-27）：合并结果与现有文件一致 ⇒ 不落盘、退出码 3。
 # 落盘会刷新 indexed_overrides.json 的 mtime，进而让下面的 regenerate 每次都跑、

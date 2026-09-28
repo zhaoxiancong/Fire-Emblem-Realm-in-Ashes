@@ -53,8 +53,17 @@ CONST_DATA EventListScr EventScr_ShanheP_BeginningScene[] = {
     SVAL(EVT_SLOT_3, ITEM_SHANHE_ZHAOYE)
     GIVEITEMTO(CHARACTER_EIRIKA)
 
-    /* 序章旁白（史书体）—— 暂用上游 id，文案待文本通道替换 */
-    BROWNBOXTEXT(0x90D, 4, 8)
+    /* ★ 序章开场旁白位 —— **当前仍显示上游文本**（FE8U target 0x090D ↔ FE8J source 0x08CD）。
+     *   山河烬自己的旁白**已经写好并落过两条通道、也过了构建**，但卡在**字库缺字**：
+     *     圭 U+572D / 州 U+5DDE / 曰 U+66F0 / 煞 U+715E / 熙 U+7199 / 疫 U+75AB
+     *   （大熙 / 豫州 / 史官记曰 / 煞疫 / 玉圭 —— 全是设定核心词，绕不开）
+     *   ⇒ 必须先走**字库补字管线**（docs/5 §3.7 / §3.4f），文案原文见 docs/5 §5.18.10。
+     *   实测报错：`error: zh-Hans/system: U+7199 is absent from the runtime font`
+     *     （scripts/localization/game_locales/width_contract.py）
+     *   ⇒ 换文案时**必须同时换这段的 id**（见同一节的坐标说明）。
+     * ★ 显示调用用 `Text_BG(BG_PLAIN_2, …)` —— 上游对这一段就是这么显示的（多页长文本）；
+     *   早先一版写成 `BROWNBOXTEXT`（棕色小框）是错的，装不下长文本。 */
+    Text_BG(BG_PLAIN_2, 0x90D)
 
     NoFade
     ENDA

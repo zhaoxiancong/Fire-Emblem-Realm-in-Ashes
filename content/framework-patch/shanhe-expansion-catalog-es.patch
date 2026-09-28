@@ -1,0 +1,66 @@
+# 山河烬 框架补丁: shanhe-expansion-catalog-es
+#
+# 目标文件: texts/expansion/catalog.es.json
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 补什么: 往 `strings` 里补 **3 条** 山河烬原创道具的扩展文本条目
+#   shanhe.item.zhaoye.name / shanhe.item.pojun.name / shanhe.item.zhaoye.desc
+#
+# ★ 为什么必须补（实测，2026-09-28）:
+#   框架的台账生成器 scripts/localization/game_locales/text_edit_ledger.py:314-330 要求
+#   **registry 里每个 active key 都必须在 ja 与 zh-Hans 的 catalog 里存在**：
+#       expansion_catalogs = {locale: json.load(...)["strings"] for locale in ("ja","zh-Hans")}
+#       "ja": expansion_catalogs["ja"][message["key"]]      # ← KeyError 就在这里
+#   而上游 7 个 catalog 的 key 集**本来一致**（各 145 条）；我们早先的
+#   `shanhe-expansion-catalog-{en,zh-hans}.patch` 只往 en/zh-Hans 加 3 条
+#   ⇒ ja/de/es/fr/it 各缺 3 条 ⇒ 台账 `KeyError: 'shanhe.item.zhaoye.name'`。
+#   ⚠️ 这个缺陷潜伏了很久：3b' 那一段是**内容感知**的（"内容未变就跳过"），
+#      不改本地化覆盖就永远不跑台账 ⇒ 一改文案立刻暴露。
+#
+# ⚠️ 文案是**占位**（有意，勿当成品）: 这 5 个 locale **不是本项目目标语言**
+#   （framework.lock `[locales] enabled = en,zh-Hans`）⇒ 直接复用我们自己写的 en 文本，
+#   只为满足「key 必须存在」的结构不变量。**将来若启用这些语言，必须重写本补丁内的正文。**
+#
+# 详见 docs/5 §5.18.10 / docs/6 §3.4g。
+#
+diff --git a/texts/expansion/catalog.es.json b/texts/expansion/catalog.es.json
+--- a/texts/expansion/catalog.es.json
++++ b/texts/expansion/catalog.es.json
+@@ -9,7 +9,7 @@
+     "debug.selector.ephraim": "Ephraim",
+     "debug.selector.unavailable": "Objetivo no disponible",
+     "autoplay.charge.label": "Carga",
+-    "autoplay.charge.help": "Delegar las unidades restantes a la IA este turno.",
++    "autoplay.charge.help": "Delega las unidades restantes\na la IA este turno.",
+     "framework.title": "Marco de expansión",
+     "framework.version_label": "Versión:",
+     "framework.build_label": "Build:",
+@@ -102,16 +102,7 @@
+     "debug.save_fixture.preview": "Copia RAM",
+     "debug.save_fixture.title_only": "Solo título",
+     "debug.save_fixture.invalid": "No válida",
+-    "debug.save_fixture.blocked": "Guardado off"
+-,
+-    "debug.action.chapter_skirmish": "Capítulo/Encuentro",
+-    "debug.selector.chapter": "Capítulo",
+-    "debug.selector.skirmish": "Encuentro",
+-    "debug.selector.eirika": "Eirika",
+-    "debug.selector.ephraim": "Ephraim",
+-    "debug.selector.unavailable": "Objetivo no disponible",
+-    "autoplay.charge.label": "Carga",
+-    "autoplay.charge.help": "Delega las unidades restantes\na la IA este turno.",
++    "debug.save_fixture.blocked": "Guardado off",
+     "danger_overlay.label": "Peligro",
+     "danger_overlay.help": "Muestra el alcance\nde ataque enemigo.",
+     "debug.view.state": "State",
+@@ -155,6 +146,9 @@
+     "debug.confirm.green_blocked": "Bloquear verde",
+     "debug.status.turn": "TURNO",
+     "debug.mode.computer": "CPU",
+-    "debug.mode.blocked": "BLOQ"
++    "debug.mode.blocked": "BLOQ",
++    "shanhe.item.zhaoye.name": "Zhaoye",
++    "shanhe.item.pojun.name": "Pojun",
++    "shanhe.item.zhaoye.desc": "Yu Cong's heirloom sword\nA sacred relic."
+   }
+ }

@@ -49,7 +49,7 @@
     },
     {
       "frame": 3000,
-      "framebuffer_hash": "fnv1a64-rgb24:18250563b1ee149b",
+      "framebuffer_hash": "fnv1a64-rgb24:eacda623be3f2608",
       "name": "prologue-map-loaded",
       "probes": [
         {
@@ -86,7 +86,7 @@
     },
     {
       "frame": 3700,
-      "framebuffer_hash": "fnv1a64-rgb24:e66171cfec419afa",
+      "framebuffer_hash": "fnv1a64-rgb24:829aebae8a9eb352",
       "name": "zhaoye-granted",
       "probes": [
         {
@@ -138,7 +138,7 @@
     },
     {
       "frame": 4700,
-      "framebuffer_hash": "fnv1a64-rgb24:8e8dc37e0f5bfd91",
+      "framebuffer_hash": "fnv1a64-rgb24:2c53017371a1c507",
       "name": "zhaoye-still-held",
       "probes": [
         {
@@ -177,7 +177,7 @@
   "format_version": 2,
   "rom": {
     "game_code": "BE8E",
-    "sha1": "e2f4eeed49f1d5e8409648c9b70c47fc1c96cce2",
+    "sha1": "08e2af4cdb8a15149b2e69aff595da730ed4f754",
     "size": 33554432,
     "title": "FIREEMBLEM2E"
   },
