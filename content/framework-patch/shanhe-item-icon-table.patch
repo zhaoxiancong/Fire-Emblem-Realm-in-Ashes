@@ -1,0 +1,50 @@
+# 山河烬 框架补丁: shanhe-item-icon-table
+#
+# 目标文件: src/data/data_item_icon.c
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 在道具图标 blob 的**末尾**追加一条声明，给照夜一个**自己的**图标槽位。
+#
+# 为什么需要（2026-09-29 玩家实测缺陷第二轮的 P0a）:
+#   玩家原话「照夜武器出来了，但是属性和数值全部是突刺剑的」。复核结论：面板数值
+#   其实**就是照夜自己的**（三条独立判据见 docs/5 §5.15）；玩家之所以"看着像突刺剑"，
+#   **图标复用是首因** —— 照夜的 iconId = 8，而 ITEM_SWORD_RAPIER 的 iconId 也正是 8，
+#   于是背包格与地图「属性」行画出来的像素就是突刺剑那把细剑。
+#
+# 机制（为什么"追加"而不是"插入"）:
+#   框架的道具图标不是一张大图，而是本文件里**每图标一条**
+#   `u8 item_icon_<名>[] = INCBIN_U8("graphics/item_icon/item_icon_<名>.4bpp")`；
+#   这些数组按**声明顺序**连成一块 blob，`ItemData.iconId` 就是**这块 blob 里的索引**
+#   （第 N 条声明 = 索引 N，每项 128 字节 = 16x16 @ 4bpp）。
+#   ⇒ 在**末尾**追加不会移动任何既有索引；插在中间会让其后所有道具的图标集体错位。
+#     本次追加前的声明条数是 224 ⇒ 新槽位索引 = **224**（原 0..223 不动）。
+#   ⚠️ 破军现用的 iconId = 222 落在 `item_icon_unused_9` 上 —— 实测那是一张
+#      "占位叉框"（非透明 88 像素：边框 + 对角叉），不是枪。属同类缺陷，待排期。
+#
+# 配套（缺一不生效）:
+#   · 图形本体 content/assets/icons/item_icon_shanhe_zhaoye.png（16x16 4bpp 索引色，
+#     调色板与既有图标 PNG 的 PLTE 逐项一致；索引 0 透明）—— 由
+#     tools/shanhe-item-icon.py 生成，构建的图标步骤铺进 graphics/item_icon/ 并 git add
+#     （框架清单/追踪校验要求这些 source 被 `git ls-files` 认到，同法术包那条教训）；
+#   · content/data/items_expansion.json 里照夜的 iconId 改为 224；
+#   · 工具自检 tools/shanhe-item-icon.py check / verify（调色板一致性、4bpp 往返、
+#     索引映射、交付 PNG 读回逐格比对）。
+#
+# 内存: 128 字节的 .data（进 ROM 常量），零 RAM 占用。
+# 校验: 框架生成器 scripts/generated_data/items/schema.py 的 read_item_icon_count()
+#   正是数本文件的 INCBIN_U8 声明条数，并据此校验 iconId 的上界 —— 本补丁把上界
+#   从 224 抬到 225，这正是新索引可用所需的全部条件。
+#
+# 详见 docs/5 §5.15、docs/6 §3.4g。
+#
+
+diff --git a/src/data/data_item_icon.c b/src/data/data_item_icon.c
+index f8cb9f4..e5064f0 100644
+--- a/src/data/data_item_icon.c
++++ b/src/data/data_item_icon.c
+@@ -229,4 +229,5 @@ u8 item_icon_metiss_tome[] = INCBIN_U8("graphics/item_icon/item_icon_metiss_tome
+ u8 item_icon_unk[] = INCBIN_U8("graphics/item_icon/item_icon_unk.4bpp");
+ u8 item_icon_unused_9[] = INCBIN_U8("graphics/item_icon/item_icon_unused_9.4bpp");
+ u8 item_icon_unused_10[] = INCBIN_U8("graphics/item_icon/item_icon_unused_10.4bpp");
++u8 item_icon_shanhe_zhaoye[] = INCBIN_U8("graphics/item_icon/item_icon_shanhe_zhaoye.4bpp");
+ u8 item_icon_palette[] = INCBIN_U8("graphics/item_icon/item_icon_palette.agbpal");

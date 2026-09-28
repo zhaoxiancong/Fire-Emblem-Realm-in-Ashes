@@ -1,0 +1,171 @@
+# 山河烬 框架补丁: shanhe-item-desc-seam
+#
+# 目标文件: src/statscreen.c
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 让扩展槽道具（0xCE 破军 / 0xCF 照夜）在**物品帮助框**里有真实可达的
+#   描述文本。这是 2026-09-29 玩家实测缺陷第二轮的 P0b ——
+#   玩家原话「照夜武器出来了，但是属性和数值全部是突刺剑的，而且战斗的特效也没有出现」，
+#   复盘发现该句中"看着像突刺剑"的可见来源之一正是**帮助框下半那片空白**
+#   （玩家截图里肉眼可见）。
+#
+# 缺陷根因（与"名字"那轮同源，但落点不同）:
+#   框架策略：扩展道具不绑共享消息表 ⇒ ItemData.descTextId 恒为 0
+#   ⇒ 帮助框的描述回落 `GetStringFromIndex(0)` ⇒ 空消息 ⇒ 一片空白。
+#   ★ 与"名字"的关键差别：名字有一个**返回字符串**的生产函数（GetItemName()），
+#     而描述在框架里只有 `GetItemDescId()`（返回 **id**）。把扩展目录的 id 塞进
+#     descTextId 是**死路** —— 扩展目录的 id（146+）与 FE8U 消息 id（0x1..0xD55）
+#     **地址空间重叠**，任何直读 descTextId 的代码都会取到无关字符串。
+#     所以描述只能像名字一样"在调用点代入字符串"，不能走 id。
+#
+# 改法（一处代入，复用框架**已有**的 string 通道）:
+#   src/statscreen.c 的 StartHelpBoxExtInternal() 本来就带一个 `const char *string`
+#   参数，并且已经把「测量盒宽高 → 直接吃字符串 → 驱动文本 proc」整条路写好了
+#   （那段 `if (string) GetStringTextBoxFromString(...) else GetStringTextBox(GetStringFromIndex(proc->mid), ...)`）。
+#   本补丁只做一件事：**在 populate 跑完之后、测量之前，把目录里的描述填进那个参数**。
+#   同一代入再复制到 ApplyHelpBoxContentSize() 的 case 1（weapon）—— 那里用
+#   "描述有没有可见文本"决定 height += 0x20 还是 0x10，不代入就会把两行描述
+#   画进"一行高"的盒子。
+#
+# 判据为什么是 `mid == 0`（而不是比对 populate 函数指针）:
+#   只有"该道具的描述本来就是空"时我们才接管 ⇒ 非本项目道具、以及所有非物品
+#   帮助框（状态 / 地形 / 支援 / 存档兼容 …）的 mid 都非 0，原样走
+#   GetStringFromIndex()，代码路径与字节完全不变。用 populate 指针会更"精确"，
+#   但 HbPopulate_AutoItem 定义在本文件更靠后的位置，引用它会引入隐式声明；
+#   mid == 0 在语义上等价且更稳。
+#
+# ★ 为什么**只需要**碰 statscreen.c 这一套（2026-09-29 逐条实证，不是推测）:
+#   src/ 下同名函数有两套 —— statscreen.c 的
+#   `static StartHelpBoxExtInternal(info, unk, const char *string)`（三参数，
+#   `Proc_Find/Proc_Start(gProcScr_HelpBox, …)`）与 helpbox.c 的
+#   `StartHelpBoxExtInternal(info)`（单参数、无 string，走 `ProcScr_Helpbox_bug_0`）。
+#   调用链把「物品帮助框」钉死在 **statscreen.c** 那一套：
+#     · 背包物品菜单  src/bmmenu.c 的 ItemMenu_HelpBox / ItemMenuHelpBox /
+#                     ConvoyMenu_HelpBox → StartItemHelpBox()
+#                     → sMutableHbi.populate = HbPopulate_AutoItem
+#     · 状态页「属性」 StartMovingHelpBox() → gProcScr_HelpBoxMoveCtrl
+#                     → HbMoveCtrl_OnInitBox → StartHelpBoxExt(proc->info, FALSE)
+#     · 两者最终都进 statscreen.c 的 StartHelpBoxExtInternal(info, unk, string)
+#   而 helpbox.c 那套只有它自己的 proc 脚本在用，与本缺陷无关 ⇒ **不碰**。
+#   ★ 同一条通道**框架自己已经在用**：src/bmmenu.c 的 ExpansionMapMenuItem_HelpBox()
+#     把目录字符串经 ExpansionLocale_ResolveCurrentPersistent() 交给
+#     StartHelpBoxString() → 正是同一个 StartHelpBoxExtInternal 的 string 参数。
+#     本补丁只是把「道具」也接上这条既有管道，没有新建任何机制。
+#   ★ mid == 0 的判据也已被消费端证实：HbPopulate_AutoItem 里
+#     `proc->mid = GetItemDescId(item)`，而 GetItemDescId() 就是
+#     `GetItemData(...)->descTextId` —— 扩展道具按框架策略恒为 0。
+#
+# 编译门: `defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST`
+#   —— src/statscreen.c 同时被归档（agbcc）车道编译，而 expansion_msg_ids.h 只存在于
+#   现代车道的生成目录；默认 cap（0xCD）下整块不编译，原版构建逐字节不变。
+#   ⚠️ `#include "id_space.h"` 必须放在那条 `#if` **之前**：两个上限宏都由它定义，
+#      宏未定义时在预处理表达式里按 0 处理（0 >= 0 恒真）⇒ 会静默走进扩展分支。
+#
+# 描述正文来源: 框架的扩展文本目录（texts/expansion/），由同批三个补丁提供 ——
+#   shanhe-expansion-registry.patch / -catalog-en.patch / -catalog-zh-hans.patch；
+#   "哪个道具用哪个 key" 的映射表在 content/src/shanhe_item_names.c（构建第 3c 步铺设）。
+#
+# 上游若自行给扩展道具提供描述通道，本补丁可删除。详见 docs/5 §5.15、docs/6 §3.4g。
+#
+
+diff --git a/src/statscreen.c b/src/statscreen.c
+index 6773d51..bfa4fa7 100644
+--- a/src/statscreen.c
++++ b/src/statscreen.c
+@@ -29,6 +29,48 @@
+ #include "statscreen.h"
+ #include "constants/songs.h"
+ 
++#if defined(MODERN)
++#include "id_space.h"
++#endif
++
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++/* Shanhe: the help-box description of expansion-slot items.
++ *
++ * Framework policy keeps every expansion item's ItemData.descTextId at 0, so
++ * the vanilla description lookup decodes message 0 -- a blank help box. The
++ * text lives in the expansion text catalog instead; ShanheItemDesc() looks a
++ * project item up by id and returns a writable buffer, or NULL for anything
++ * that is not one of ours.
++ *
++ * This reuses a path the framework already owns: ExpansionMapMenuItem_HelpBox()
++ * in src/bmmenu.c resolves a catalog string and hands it to StartHelpBoxString()
++ * -> StartHelpBoxExtInternal(info, unk, string), which sizes the box and drives
++ * the text proc for a raw string. The only thing missing for items is that the
++ * string argument arrives NULL.
++ *
++ * id_space.h MUST be included above the #if: it is what defines
++ * ITEM_ID_CONFIGURED_CAP / ITEM_ID_EXPANSION_FIRST, and an unexpanded macro is
++ * silently 0 in a preprocessor expression (0 >= 0 would switch this on even in
++ * a build with the expansion slot disabled).
++ *
++ * The helper only answers for mid == 0, i.e. exactly the item help boxes whose
++ * vanilla description is empty. Every other help box (status, terrain, support,
++ * save compat, ...) has a non-zero mid and therefore keeps the original
++ * GetStringFromIndex() path byte for byte.
++ *
++ * Description text lives in src/shanhe_item_names.c (paved in by
++ * tools/shanhe-build.sh step 3c), not in this patch. */
++char* ShanheItemDesc(ItemId item);
++
++static const char* StatScreenShanheDescOrNull(int item, int mid)
++{
++    if (mid != 0)
++        return NULL;
++
++    return ShanheItemDesc((ItemId)ITEM_INDEX(item));
++}
++#endif
++
+ struct StatScreenInfo EWRAM_DATA sStatScreenInfo = {};
+ struct HelpBoxInfo EWRAM_DATA sMutableHbi = {};
+ const struct HelpBoxInfo * EWRAM_DATA sLastHbi = NULL;
+@@ -2057,6 +2099,14 @@ static void StartHelpBoxExtInternal(
+     if (proc->info->populate)
+         proc->info->populate(proc);
+ 
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++    /* Shanhe: hand the catalog description to the pre-existing "raw string"
++     * help-box path, which already sizes the box and drives the text proc for
++     * it. NULL (every non-Shanhe item) leaves this a no-op. */
++    if (string == NULL)
++        string = StatScreenShanheDescOrNull(proc->item, proc->mid);
++#endif
++
+     SetTextFontGlyphs(1);
+ #ifdef MODERN
+     if (string)
+@@ -2254,16 +2304,30 @@ void ApplyHelpBoxContentSize(struct HelpBoxProc* proc, int width, int height)
+     {
+ 
+     case 1: // weapon
++    {
++        const char* descText = NULL;
++
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++        /* Shanhe: same substitution as in StartHelpBoxExtInternal, so a
++         * catalog description is measured instead of the empty message 0 --
++         * otherwise a two-line description would be drawn into a box sized
++         * for one line. */
++        descText = StatScreenShanheDescOrNull(proc->item, proc->mid);
++#endif
++
+         if (width < 0x90)
+             width = 0x90;
+ 
+-        if (StatScreenDescriptionHasVisibleContent(
+-                GetStringFromIndex(proc->mid)))
++        if (descText == NULL)
++            descText = GetStringFromIndex(proc->mid);
++
++        if (StatScreenDescriptionHasVisibleContent(descText))
+             height += 0x20;
+         else
+             height += 0x10;
+ 
+         break;
++    }
+     
+     case 2: // staff
+         if (width < 0x60)

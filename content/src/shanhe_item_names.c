@@ -58,14 +58,33 @@
  *   · shanhe-item-name-seam-msg.patch → src/msg.c
  *       ③ 对话里 `[Item]`（控制码 0x22）的文本替换：不挂这里，
  *          对话内嵌的道具名会走 `GetStringFromIndex(nameTextId=0)` 变空白。
+ *   · shanhe-item-desc-seam.patch     → src/statscreen.c   （2026-09-29 第二轮 P0b）
+ *       ④ **物品帮助框的描述**：`StartHelpBoxExtInternal(info, unk, const char *string)`
+ *          本来就把「测量盒宽高 → 直接吃字符串 → 驱动文本 proc」整条路写好了
+ *          （框架自己的 `bmmenu.c: ExpansionMapMenuItem_HelpBox()` 就是这条路的
+ *          第一个用户）。缺的只是道具的 `string` 一直是 NULL ⇒ 补丁在
+ *          `populate()` 之后、测量之前代入 `ShanheItemDesc()` 的结果；
+ *          同一代入复制到 `ApplyHelpBoxContentSize()` 的 case 1（weapon）——
+ *          那里靠"描述有没有可见文本"决定盒高 `+= 0x20` 还是 `+= 0x10`，
+ *          不代入就会把两行描述画进"一行高"的盒子。
+ *          判据 `proc->mid == 0` 等价于"该道具的 descTextId 本来就是空的"，
+ *          所以非本项目道具与所有非物品帮助框（状态/地形/支援/存档兼容…）
+ *          的代码路径与字节完全不变。
  *
  * ── 上界约定 ────────────────────────────────────────────────────────
- * 注册表里两个 key 的 max_decoded_bytes = 24 < 本缓冲 32 ⇒ 拷贝不截断。
- * 该不等式由 tools/shanhe-namecheck.py 断言（构建第 5 步检查 ⑥）。
+ * 名字 key 的 max_decoded_bytes = 24 < 名字缓冲 32；
+ * 描述 key 的 max_decoded_bytes = 88 < 描述缓冲 96（96 正是框架的
+ * EXPANSION_LOCALE_SCRATCH_SLOT_BYTES，即目录解析结果的硬上限）。
+ * 两个不等式都由 tools/shanhe-namecheck.py 断言（构建第 5 步检查 ⑥）。
  *
  * ── 内存 / 兼容 ────────────────────────────────────────────────────
- * 零 EWRAM / 零 BSS 之外的常驻：只有一块 32 字节的静态缓冲（.bss）与一张
- * 常量表（.rodata）；EWRAM 余量在 release 档仅 976 字节，故此处刻意不发散。
+ * 零 EWRAM / 零 BSS 之外的常驻：两块静态缓冲（名字 32 + 描述 96 = 128 字节
+ * .bss）与两张常量表（.rodata）；EWRAM 余量在 release 档仅 976 字节，
+ * 故此处刻意不发散。
+ * ★ 两块缓冲**刻意不复用**：名字的消费方（GetItemNameWithArticle → InsertPrefix）
+ *   会**就地改写**拿到的字符串；若与描述共用一块，"先取名字、再取描述"的
+ *   一次序列就会把已经交出去的名字改坏。多花 96 字节换这个不变量，值得。
+ *   （描述缓冲 96 = 目录解析槽上限，所以拷贝永远不会截断。）
  * C89 风格，不依赖任何 C99 特性（框架的现代车道与归档车道都会编译本文件，
  * 只有现代车道会链接它）。
  */
@@ -101,6 +120,40 @@ static const struct ShanheItemNameEntry
 };
 
 static char sShanheItemNameBuffer[SHANHE_ITEM_NAME_BUFFER];
+
+/* ── 描述映射表（2026-09-29 第二轮 P0b）──────────────────────────────
+ * 消费者只有一个：src/statscreen.c 的物品帮助框接缝
+ * （见 content/framework-patch/shanhe-item-desc-seam.patch）。
+ * 与名字表同形 —— 给 item id，返回当前语言的可写缓冲；NULL = 不是本项目道具。
+ *
+ * 为什么**不**把描述塞进 ItemData.descTextId（死路，别回头再试）：
+ *   扩展目录的 id（146+）与 FE8U 消息 id（0x1..0xD55）**地址空间重叠**，
+ *   任何直读 descTextId 的代码都会取到无关字符串；而描述在框架里恰恰只有
+ *   `GetItemDescId()`（返回 id）这一个入口。名字那一轮已踩过同源结论。
+ */
+#define SHANHE_ITEM_DESC_BUFFER 96
+
+static const struct ShanheItemDescEntry
+{
+    ItemId item;
+    ExpansionMsgId msgId;
+} sShanheItemDescs[] =
+{
+    /* 照夜（剑，0xCF）。注册表 key: shanhe.item.zhaoye.desc（id 148）
+     * zh-Hans 正文: "守鼎人信物，虞聪的佩剑\n神器，不可出售"
+     *
+     * ★ 文案纪律（照夜的机制尚未落地）：
+     *   docs/3 §3.2 给照夜定了「对凶相、尸傀 ×1.5」的克制效果，但该机制
+     *   **尚未实现** —— 照夜的 pEffectiveness 现在仍是 0，且原版倍率是 ×3、
+     *   目标是自定义兵种，填指针解决不了，必须走 ExpansionMechanicsRegister
+     *   那类机制 seam。所以描述正文里**刻意不写**那句效果承诺：否则玩家会
+     *   照着文案去验，验不到就会再报一次"特效没出现"，把假缺陷喂回缺陷池。
+     *   等 P1 的机制 seam 落地后，再把那句补进正文并同步 raise 上界。
+     */
+    { ITEM_SHANHE_ZHAOYE, EXP_MSG_SHANHE_ITEM_ZHAOYE_DESC },
+};
+
+static char sShanheItemDescBuffer[SHANHE_ITEM_DESC_BUFFER];
 
 /*
  * 返回本项目道具的显示名（当前语言，缺键回退英文），否则 NULL。
@@ -139,9 +192,53 @@ char* ShanheItemName(ItemId item)
     return NULL;
 }
 
+/*
+ * 返回本项目道具的**帮助框描述**（当前语言，缺键回退英文），否则 NULL。
+ * 与 ShanheItemName() 同形：指针指向本文件内的静态缓冲，只在
+ * 「取到描述 → 立刻交给帮助框」的生产路径上使用。
+ *
+ * 缓冲 96 = 框架的 EXPANSION_LOCALE_SCRATCH_SLOT_BYTES（目录解析结果的硬上限），
+ * 所以这个拷贝循环**不可能**截断；`max_decoded_bytes = 88 < 96` 还留了余量。
+ */
+char* ShanheItemDesc(ItemId item)
+{
+    const char* resolved;
+    u32 k;
+    u32 i;
+
+    for (k = 0; k < (u32)(sizeof(sShanheItemDescs) / sizeof(sShanheItemDescs[0])); k++)
+    {
+        if (sShanheItemDescs[k].item != item)
+            continue;
+
+        resolved = ExpansionLocale_ResolveCurrentPersistent(sShanheItemDescs[k].msgId);
+
+        if (resolved == NULL)
+            return NULL;
+
+        for (i = 0; i + 1 < SHANHE_ITEM_DESC_BUFFER; i++)
+        {
+            sShanheItemDescBuffer[i] = resolved[i];
+            if (resolved[i] == '\0')
+                break;
+        }
+        sShanheItemDescBuffer[SHANHE_ITEM_DESC_BUFFER - 1] = '\0';
+
+        return sShanheItemDescBuffer;
+    }
+
+    return NULL;
+}
+
 #else /* !MODERN || 未扩道具槽 —— 与框架惯例一致：保持符号存在，恒返回 NULL */
 
 char* ShanheItemName(ItemId item)
+{
+    (void)item;
+    return NULL;
+}
+
+char* ShanheItemDesc(ItemId item)
 {
     (void)item;
     return NULL;

@@ -75,7 +75,35 @@ warn() { printf "  %s!%s %s\n" "$c_yellow" "$c_off" "$1"; printf "  [!]  %s\n" "
 dim()  { printf "  %s%s%s\n" "$c_dim" "$1" "$c_off";      printf "       %s\n" "$1" >> "$REPORT"; }
 act()  { printf "  %s→%s %s\n" "$c_cyan" "$c_off" "$1";   printf "  [>]  %s\n" "$1" >> "$REPORT"; }
 
-die() { bad "$1"; printf "\n  日志：%s\n" "$REPORT"; exit 1; }
+# ── 临时文件登记制（2026-09-29 加）──
+#   缺陷现场：第 2 步的 TARGETS_FILE 与第 6 步的 PATCH_TARGETS_FILE 用 `mktemp`
+#   建于 /tmp 却**从不回收**，脚本正常跑完在 /tmp 留下两个 605 B 的 tmp.XXXXXX
+#   残留（与「调试产物当轮清掉」的纪律相违）。同段的 CUR / BOOT_JSON / FONT_TMP
+#   都有显式 rm，唯独这两处漏了。
+#   两处都属"用完即弃"，正确做法就是最后一次使用后 rm；但 `die` 可能落在
+#   创建与回收**之间**（如 5b 步 ROM SHA1 不符），那样照样漏。故同时把回收
+#   挂到 die() 上 —— 显式 rm + die 兜底 两层都在，才算真的不漏。
+#   为什么用"登记制"而不是全局 trap：脚本第 4 步的心跳**已经**在用自己的
+#   `trap ... EXIT`（装于 :1394、撤于 :1482）。全局 trap 会被它覆盖或清除，
+#   靠不住；登记制不依赖 trap 语义。
+#   ⚠️ 新增 mktemp 一律照两行式登记（见下）；仍用裸 mktemp 的（如 write_if_changed）
+#      必须在**所有**返回路径上自行 rm（那是它已经在做的事）。
+SHANHE_TMP_PATHS=()
+# 登记一个**已由父 shell 创建**的临时路径，供 cleanup_tmp / die 兜底回收。
+# 为什么不做成 `VAR="$(mktemp_tracked)"` 这种一步封装：命令替换 `$( )` 在**子 shell**
+# 里执行，函数内的数组追加**不会传回父 shell**（实测会静默失效 —— 数组看着有元素，
+# 父 shell 里永远是空）。所以登记必须发生在**父 shell 的语句**里，统一写成两行：
+#     VAR="$(mktemp)"; tmp_track "$VAR"
+tmp_track() { [ -n "$1" ] && SHANHE_TMP_PATHS+=("$1"); return 0; }
+cleanup_tmp() {
+  local f
+  for f in "${SHANHE_TMP_PATHS[@]}"; do
+    [ -n "$f" ] && rm -rf "$f" 2>/dev/null
+  done
+  SHANHE_TMP_PATHS=()
+}
+
+die() { bad "$1"; cleanup_tmp; printf "\n  日志：%s\n" "$REPORT"; exit 1; }
 
 # ── 非交互保护（2026-09-29 实测新增）──
 #   缺陷现场：框架工作区「不干净」时会弹「继续？(y/N)」，而 `read -r` 在
@@ -458,7 +486,7 @@ fi
 H "第 2 步 / 写前快照（记录将被改写文件的 SHA1）"
 
 # 将被改写的路径（相对框架根）
-TARGETS_FILE="$(mktemp)"
+TARGETS_FILE="$(mktemp)"; tmp_track "$TARGETS_FILE"
 {
   # data/ 下所有同名 JSON（合并目标）
   if [ -d "$CONTENT_DIR/data" ]; then
@@ -498,6 +526,8 @@ else
   done < "$TARGETS_FILE"
   ok "快照已写入 $PREWRITE_SNAPSHOT（$(wc -l < "$PREWRITE_SNAPSHOT") 行）"
 fi
+
+rm -f "$TARGETS_FILE"   # 用完即弃（2026-09-29 补：此前漏回收，/tmp 里累积 605 B 残留）
 
 # ══════════════════════════════════════════
 # 第 3 步 · 铺设
@@ -1062,7 +1092,7 @@ if [ -n "$FONT_PATCH" ]; then
     # 内容感知同步（2026-09-27）：旧实现 `tar xzf … -C 框架` 会**无条件重写 26 个文件**，
     # 其中含 graphics/fonts/cjk/*（CJK 字库 .2bpp/.u8）—— mtime 一变，字库对象全量重编。
     # 现在先解到临时目录，逐文件比对，只有真的不同才落盘。
-    FONT_TMP="$(mktemp -d)"
+    FONT_TMP="$(mktemp -d)"; tmp_track "$FONT_TMP"
     if tar xzf "$FONT_PATCH" -C "$FONT_TMP" 2>/dev/null; then
       FONT_N=0; FONT_SAME=0
       while IFS= read -r rel; do
@@ -1269,11 +1299,58 @@ if [ "$n_spell_pkgs" -gt 0 ]; then
   fi
 fi
 
+# ── 3e. 原创道具图标铺设（P0a；★ 第 5 类已知偏离：会 git add 进框架索引）──
+# 机制（2026-09-29 实测，别凭直觉猜"要不要自己转 4bpp"）：
+#   框架的道具图标 `graphics/item_icon/*.4bpp` **不是提交物**，而是由
+#   Makefile:599 的通用模式规则 `%.4bpp: %.png  ; $(GBAGFX) $< $@` 从同名 PNG 生成，
+#   且 `.gitignore:86` 忽略 `*.4bpp`。
+#   仓库真正追踪的是 **PNG 源**：实测 `graphics/item_icon/` 下追踪 224 个 .png
+#   + 1 个 .agbpal、**0 个 .4bpp**。
+#   ⇒ 本步骤只需把内容层的 PNG 幂等铺进框架并 `git add` —— 不需要本脚本自己转
+#     .4bpp，也不要往仓库里提交 .4bpp（那会与既有 224 个的来源不一致）。
+#   为什么必须 git add：同法术包 —— 框架的清单/追踪校验走 `git ls-files`，
+#   看的是**索引**（scripts/assets/manifest.py:_validate_tracked_paths）。
+#   ⚠️ 4bpp 编码与调色板正确性由两端保证（都已实测）：
+#     ① 内容层 tools/shanhe-item-icon.py 的 check/verify：PLTE 与共享调色板逐项一致、
+#        4bpp 往返恒等、交付 PNG 读回索引矩阵与原矩阵逐格一致；
+#     ② 构建期用框架自己的 gbagfx 转出的 .4bpp 与工具预期**逐字节一致**，
+#        且对既有 item_icon_sword_rapier.png 复现出仓库既有的 .4bpp（对照组）。
+#   ⚠️ 新增图标是**追加**在 4bpp 声明块末尾 ⇒ 只有新道具的 iconId 会变，
+#      既有 224 个索引一个都不动（插入中间会让其后图标集体错位）。
+#   RESTORE 无需为本步骤额外写清理：`git restore --source=HEAD --staged --worktree .`
+#   本身就会把"索引里新增、HEAD 里没有"的 PNG 一并删掉（同法术包，见 RESTORE 段的勘误）。
+ICON_SRC="$CONTENT_DIR/assets/icons"
+ICON_DST_REL="graphics/item_icon"
+ICON_PNGS="$(find "$ICON_SRC" -maxdepth 1 -type f -name '*.png' 2>/dev/null | sort)"
+n_icons=$(printf '%s\n' "$ICON_PNGS" | sed '/^$/d' | wc -l | tr -d ' ')
+if [ "$n_icons" -gt 0 ]; then
+  if [ "$DRY_RUN" = "1" ]; then
+    act "[预演] 铺设 $n_icons 个道具图标 PNG → $ICON_DST_REL/ 并 git add 进框架索引"
+    printf '%s\n' "$ICON_PNGS" | sed 's|^|      → |'
+  else
+    ICON_N=0
+    while IFS= read -r srcpng; do
+      [ -n "$srcpng" ] || continue
+      base="$(basename "$srcpng")"
+      if write_if_changed "$FRAMEWORK_DIR/$ICON_DST_REL/$base" < "$srcpng"; then
+        dim "图标：写入 $base"
+      fi
+      # ★ 让框架的 `git ls-files` 认到它（追踪校验的硬要求）
+      ( cd "$FRAMEWORK_DIR" && git add "$ICON_DST_REL/$base" ) \
+        || die "图标 $base：git add 失败（框架索引不可写）"
+      ( cd "$FRAMEWORK_DIR" && git ls-files --error-unmatch "$ICON_DST_REL/$base" ) >/dev/null 2>&1 \
+        || die "图标 $base：git ls-files 不认识它（框架追踪校验会失败）"
+      ICON_N=$((ICON_N+1))
+    done <<< "$ICON_PNGS"
+    ok "$ICON_N 个道具图标已铺设并登记进框架索引（$ICON_DST_REL/；.4bpp 由 make 从 PNG 生成）"
+  fi
+fi
+
 # ── 3d'. 其它资产提示（未接线的资产种类）──
 if [ -d "$CONTENT_DIR/assets" ] \
-   && [ -n "$(find "$CONTENT_DIR/assets" -type f -not -path '*/spells/*' -not -name '.gitkeep' 2>/dev/null)" ]; then
-  warn "content/assets/ 下还有非 spells/ 的资产 —— 需按其「拥有缝」登记（见 docs/8），"
-  dim "当前脚本只铺 spells/（自定义法术特效）；其余仍走四动词管线：make assets-validate/-generate/-check/-test"
+   && [ -n "$(find "$CONTENT_DIR/assets" -type f -not -path '*/spells/*' -not -path '*/icons/*' -not -name '.gitkeep' 2>/dev/null)" ]; then
+  warn "content/assets/ 下还有非 spells/ 、非 icons/ 的资产 —— 需按其「拥有缝」登记（见 docs/8），"
+  dim "当前脚本只铺 spells/（自定义法术特效）与 icons/（原创道具图标）；其余仍走四动词管线：make assets-validate/-generate/-check/-test"
 fi
 
 act "铺设完成：合并/铺设 $MERGED_COUNT 项，跳过 $SKIPPED_COUNT 项"
@@ -1506,7 +1583,7 @@ else
   #      `expansion-modern-boot-check` 的原因，见 docs/6 §3.1）。
   #   4) 附带好处：采集 JSON 里带模拟器**自读**的 rom.sha1/size/title/game_code，
   #      可交叉核对 ②③ —— 比 `dd` 读头上更强（那是另一条独立路径的读数）。
-  BOOT_JSON="$(mktemp -t shanhe-boot-XXXXXX.json 2>/dev/null)"
+  BOOT_JSON="$(mktemp -t shanhe-boot-XXXXXX.json 2>/dev/null)"; tmp_track "$BOOT_JSON"
   BOOT_RC=127
   if [ -f "$FRAMEWORK_DIR/tools/gba-playtest/gba_playtest.py" ] && \
      [ -f "$FRAMEWORK_DIR/tools/gba-playtest/scenarios/boot.json" ]; then
@@ -1670,14 +1747,14 @@ H "第 6 步 / 反查框架侧改动（防呆关键）"
 if [ "$DRY_RUN" = "1" ]; then
   act "[预演] 将比对 git status 与第 2 步快照，高亮「预期外」改动"
 else
-  CUR="$(mktemp)"
+  CUR="$(mktemp)"; tmp_track "$CUR"
   git -C "$FRAMEWORK_DIR" status --porcelain > "$CUR"
 
   # ★ 框架补丁的目标文件：**从 content/framework-patch/*.patch 实时解析**，不写死在白名单里。
   #   原因（2026-09-25 实测）：白名单是本文件里的第二个硬编码表，
   #   每加一个改「新文件」的补丁就得手改一次；漏改的表现是"误报预期外"（噪声），
   #   而噪声会训练出"忽略告警"的习惯 —— 那这条防线就废了。
-  PATCH_TARGETS_FILE="$(mktemp)"
+  PATCH_TARGETS_FILE="$(mktemp)"; tmp_track "$PATCH_TARGETS_FILE"
   if [ -d "$CONTENT_DIR/framework-patch" ]; then
     find "$CONTENT_DIR/framework-patch" -maxdepth 1 -type f -name '*.patch' 2>/dev/null \
       | while IFS= read -r p; do
@@ -1707,6 +1784,7 @@ else
         docs/game_locale_text_edits.md) ;;                        # ★ 预期（文本台账，见 3b'）
         fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
         graphics/custom_spell/*) ;;                               # ★ 预期（法术特效包，见 3d；含 git add 的暂存新增）
+        graphics/item_icon/*) ;;                                  # ★ 预期（原创道具图标 PNG，见 3e；含 git add 的暂存新增；同名 .4bpp 由 make 生成且被 .gitignore 忽略，不进 status）
         reports/*) ;;                                             # ★ 预期（generated-data 的 inventory/审计报告是 generate 的正常副产物）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)
@@ -1730,13 +1808,14 @@ else
     done < "$CUR"
 
     if [ "$UNEXPECTED" -eq 0 ]; then
-      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、graphics/custom_spell/(法术特效包)、src/shanhe_*.c、Makefile、build/，以及 content/framework-patch/ 声明的全部补丁目标）"
+      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、graphics/custom_spell/(法术特效包)、graphics/item_icon/(道具图标)、src/shanhe_*.c、Makefile、build/，以及 content/framework-patch/ 声明的全部补丁目标）"
     else
       warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
       dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"
     fi
   fi
   rm -f "$CUR"
+  rm -f "$PATCH_TARGETS_FILE"   # 2026-09-29 补：此前漏回收（与 CUR 同段，唯独它没有 rm）
 fi
 
 # ─────────────────────────── 收尾 ───────────────────────────

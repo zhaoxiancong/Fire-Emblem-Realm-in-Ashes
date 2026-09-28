@@ -3,8 +3,10 @@
 # 目标文件: texts/expansion/registry.json
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
 #
-# 修什么: 在框架的「扩展文本目录」里注册两个新 key，承载本项目两件原创神器的
-#   显示名正文（id 146 = 照夜 / 147 = 破军）。
+# 修什么: 在框架的「扩展文本目录」里注册**三个**新 key ——
+#   146 = 照夜显示名 / 147 = 破军显示名 / 148 = 照夜的**物品帮助框描述**。
+#   （146/147 是 2026-09-29 第一轮「背包里没有照夜」缺陷的修复落点；
+#    148 是同日第二轮 P0b「帮助框下半一片空白」的修复落点。）
 #
 # 为什么走这条通道（而不是 texts.txt / 游戏文本目录 / nameTextId）:
 #   见 shanhe-item-name-seam.patch 的说明与 docs/5 §5.14。要点：
@@ -13,25 +15,39 @@
 #   · 游戏文本目录按 FE8U target id 寻址，表达不了"全新消息"；
 #   · nameTextId 的 id 空间与 FE8U 消息（0x1..0xD55）重叠，语义会污染。
 #
-# id 为什么是 146/147: 本文件在上游该 commit 里 0..145 连续占用；本补丁**追加**
-#   两条并保持严格升序（registry 的 append-only 契约 —— 已退休的槽位不得复用）。
+# id 为什么是 146/147/148: 本文件在上游该 commit 里 0..145 连续占用；本补丁**追加**
+#   三条并保持严格升序（registry 的 append-only 契约 —— 已退休的槽位不得复用）。
+#
+# ★ 为什么描述那条要写 `"pseudo_policy": "compact"`（2026-09-29 实测，不加就构建失败）:
+#   框架会从 **en** 派生伪语言 `qps-ploc`，并且**对它也做逐行宽度校验**。默认策略
+#   `transform` 会**加长**文本（前后缀 + 字母风格化）：实测 "Yu Cong's heirloom sword"
+#   伪化后宽 **33** > max_width 24 ⇒ 构建在生成
+#   `build/.../expansion_msg_ids.h` 时硬失败（modern.mk:2334）。
+#   `compact`（"Alternates ASCII case without padding for width-critical surfaces"，
+#   见 scripts/localization/schema.py）是框架**自己**给宽度受限表面的选择 ——
+#   全库 146 条里有 39 条声明了它（含 autoplay.charge.help 这类帮助文本）。
+#   实测复核：把全库按各自策略伪化后逐条比宽度，**只有我们这条原本超宽** ——
+#   说明这是必须按惯例处理的口径，不是框架的误报。
+#   （两条名字 key 保持默认 `transform`：名字短，伪化后 16 ≤ 24，通过。）
 #   ⚠️ 上游若在同一区间新增条目，本补丁需要重新编号：构建会因 id 重复/不升序
 #   报错（tools/shanhe-namecheck.py 的 C1 也会独立复核），不会静默串味。
 #
 # 配套（缺一不生效）:
 #   · shanhe-expansion-catalog-en.patch / -zh-hans.patch —— 两个 key 的正文；
 #   · shanhe-item-name-seam.patch（src/bmitem.c）与 shanhe-item-name-seam-msg.patch
-#     （src/msg.c）—— 真正去读这两个 id 的生产代码；
+#     （src/msg.c）—— 真正去读 146/147 这两个 id 的生产代码；
+#   · shanhe-item-desc-seam.patch（src/statscreen.c）—— 真正去读 148 的生产代码
+#     （物品帮助框的描述接缝）；
 #   · content/src/shanhe_item_names.c（内容层，"哪个道具用哪个 key"的映射表）。
 #
 # 详见 docs/5 §5.14、docs/6 §3.4g。
 #
 
 diff --git a/texts/expansion/registry.json b/texts/expansion/registry.json
-index 8b97862..e0029dc 100644
+index 8b97862..b746daa 100644
 --- a/texts/expansion/registry.json
 +++ b/texts/expansion/registry.json
-@@ -1232,6 +1232,24 @@
+@@ -1232,6 +1232,34 @@
        "max_decoded_bytes": 96,
        "pseudo_policy": "compact",
        "notes": "Issue #168 localized map-menu help for issue #6 danger overlay."
@@ -53,6 +69,16 @@ index 8b97862..e0029dc 100644
 +      "max_width": 24,
 +      "max_decoded_bytes": 24,
 +      "notes": "Shanhe original divine relic 'Pojun' item display name (item 0xCE). Rendered by the GetItemName() seam in src/bmitem.c."
++    },
++    {
++      "id": 148,
++      "key": "shanhe.item.zhaoye.desc",
++      "status": "active",
++      "surface": "framework_generic",
++      "max_width": 24,
++      "max_decoded_bytes": 88,
++      "pseudo_policy": "compact",
++      "notes": "Shanhe 'Zhaoye' item description (item 0xCF), shown in the item help box by the src/statscreen.c seam. Deliberately NOT carried in ItemData.descTextId: expansion-catalog ids overlap the FE8U message id space, so an id round-trip is unusable. The design-doc effectiveness clause (docs/3 3.2) is intentionally NOT written here while the mechanic does not exist, so the in-game text makes no unimplemented promise. pseudo_policy=compact: qps-ploc is derived FROM en and the framework width-checks it too; the default 'transform' pads the text ('Yu Cong's heirloom sword' -> 33 wide) and blew the build up in the expansion_msg_ids.h step, while 'compact' is the framework's own choice for width-critical/help surfaces (39 existing entries)."
      }
    ]
  }

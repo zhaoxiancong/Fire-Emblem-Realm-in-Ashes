@@ -3,7 +3,15 @@
 # 目标文件: scripts/generated_data/consumer_classification.json
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
 #
-# 修什么: 给本项目新增的 `ShanheItemName(ItemId)` 登记两条**消费者普查分类**。
+# ⚠️ 文件名沿用历史名（v1.27 时它只登记了「名字」消费面）。本版起同时登记
+#    「描述」消费面。**故意不改名**：docs/6 的 v1.27 历史版本行写的就是这个名字，
+#    改掉会让那一行指向不存在的文件。（对比：shanhe-item-id-pojun → shanhe-item-ids
+#    那次改名属"内容收敛"，历史行同步改是合理的；本次是"内容扩张"，性质不同。）
+#
+# 修什么: 给本项目新增的两族 id 域消费者登记**消费者普查分类**，共 3 条：
+#   ① src/bmitem.c|function-signature|item|ShanheItemName      —— 显示名（GetItemName 接缝）
+#   ② src/msg.c|function-signature|item|ShanheItemName         —— 显示名（对白 [Item] 接缝）
+#   ③ src/statscreen.c|function-signature|item|ShanheItemDesc  —— 描述（帮助框接缝，2026-09-29 补）
 #
 # 为什么必须登记（构建真的会失败，不是文档要求）:
 #   框架的 `scripts/generated_data/idspace.py` 在生成
@@ -13,31 +21,43 @@
 #     scripts.generated_data.consumer_census.CensusError:
 #       unclassified consumer hit 'src/bmitem.c|function-signature|item|ShanheItemName'
 #       ... classify it in scripts/generated_data/consumer_classification.json
-#   （2026-09-29 实测：本次构建正是在编译到第 400 个 .c 时撞在这条门上。）
+#   两次实测都撞在这条门上：① 名字轮，编译到第 400 个 .c 时；② 描述轮，编译到
+#   第 402 个 .c 时（报的是 src/statscreen.c|function-signature|item|ShanheItemDesc）。
 #
 # 为什么是 ui-buffer 而不是 bootstrap 提案的 external-interface:
 #   bootstrap 的分类是**按文件名/符号名 token 猜的**（框架注释写明"a human still
-#   reviews every row"）。本函数的产物正是**界面显示名的可写缓冲**，与框架自己给
-#   `ItemData.nameTextId` 的分类完全同族 —— 见 reports/id_space_audit.md：
+#   reviews every row"）。这两个函数的产物正是**界面显示文本的可写缓冲**，与框架
+#   自己给 `ItemData.nameTextId` / `descTextId` 的分类完全同族 —— 见
+#   reports/id_space_audit.md 的分类表：
 #     | item | ui-buffer | include/bmitem.h | ItemData.nameTextId (u16) + iconId (u8) |
 #   故人工改为 ui-buffer。
 #
-# 为什么只有 2 行（不是照抄 bootstrap 的整份输出）:
+# 为什么只有 3 行（不是照抄 bootstrap 的整份输出）:
 #   `bootstrap` 会按框架自己的 canonical 排序**重排整份文件**，产生 8 条与本议题
 #   无关的错位（本仓库提交的那版不是这种排序）。按框架注释的本意逐条人工追加，
 #   改动最小、可逐行复核。
+#   ⚠️ 本文件按 key 的**字符串序**排列（全库 1142 条里只有 tools/ 段有 1 处历史
+#      错位）。新 key 的落点由字符串序决定；`src/statscreen.c|…` 正好落在
+#      `src/prep_menuproc.c|…Sprite_PrepChapterNum_X` 与 `src/uimenu.c|…` 之间。
+#      落点错了构建仍会通过（普查只查"有无"、不查"顺序"），但会放大未来 bootstrap
+#      的 diff 噪音，所以按序落位。
 #
 # 复核: `python3 -m scripts.generated_data.consumer_census check`
-#   → consumer census clean: 1142 hit(s), 1095 audited, 47 reviewed-exclusion,
-#     digest d6b7a1bf…
+#   → consumer census clean: 1143 hit(s), 1096 audited, 47 reviewed-exclusion,
+#     digest 4d16c7175b65163c31d3f386524d2729ae7707d117235da997192160aba5eadb
+#     （2026-09-29 实测。加描述条目前是 1142 / 1095 / d6b7a1bf…）
+#   ⚠️ 该门禁是**双向**的：只应用本补丁而不应用 shanhe-item-desc-seam.patch，
+#      会从 unclassified 翻成 stale（分类表里有、源码里没有）。复核时必须把
+#      "引入该消费者"的整条链路一起铺上。
 #
-# 配套: shanhe-item-name-seam.patch / -msg.patch（真正引入该函数的那两个补丁）。
+# 配套: shanhe-item-name-seam.patch / -msg.patch（引入 ShanheItemName）、
+#       shanhe-item-desc-seam.patch（引入 ShanheItemDesc）。
 #
 # 详见 docs/5 §5.14、docs/6 §3.4g。
 #
 
 diff --git a/scripts/generated_data/consumer_classification.json b/scripts/generated_data/consumer_classification.json
-index 3c4ca41..51e9c4f 100644
+index 3c4ca41..d328002 100644
 --- a/scripts/generated_data/consumer_classification.json
 +++ b/scripts/generated_data/consumer_classification.json
 @@ -3657,6 +3657,10 @@
@@ -62,3 +82,14 @@ index 3c4ca41..51e9c4f 100644
      "src/prep_itemscreen.c|data-symbol|item|gPrepShopInventory": {
        "category": "lookup-table",
        "reason": null
+@@ -4073,6 +4081,10 @@
+       "category": "reviewed-exclusion",
+       "reason": "graphics payload (tile/palette/TSA bytes) whose asset name mentions the item/chapter UI it decorates; stores no ID and is never indexed by one"
+     },
++    "src/statscreen.c|function-signature|item|ShanheItemDesc": {
++      "category": "ui-buffer",
++      "reason": null
++    },
+     "src/uimenu.c|data-symbol|item|sItemCountYOffsetLookup": {
+       "category": "reviewed-exclusion",
+       "reason": "pixel Y-offset lookup indexed by the number of menu rows, not by an item ID"

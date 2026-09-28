@@ -3,12 +3,18 @@
 # 目标文件: texts/expansion/catalog.en.json
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
 #
-# 修什么: 给 shanhe-expansion-registry.patch 注册的两个 key 补上**英文**正文。
+# 修什么: 给 shanhe-expansion-registry.patch 注册的**三个** key 补上**英文**正文
+#   （两条名字 + 照夜的物品帮助框描述 id 148）。
 #
 # 为什么英文是必需的: 框架的脚本规定 AUTHORED_CATALOG_LOCALES 里只有 `en`
 #   **必须齐全**（scripts/localization/catalog.py：其余语言允许缺 key，运行时按
 #   key 单跳回退英文）。所以这两条英文是"最后一道兜底" —— 别的语言缺 key 时，
 #   玩家看到的仍是一个真实名字，而不是空串或缺字标记。
+#
+# ⚠️ 描述那条（id 148）的英文正文是 `Yu Cong's heirloom sword\nA sacred relic.`
+#   —— 单行最宽 24、共 42 字节（含 NUL），均在 max_width 24 / max_decoded_bytes 88 内。
+#   它与中文正文**有意不完全对应**：中文那两条名字是正式译名（拼音），
+#   描述则以各自语言的读感为准；约束它们的只有「逐行宽度」与「`\n` 数量一致」。
 #
 # ⚠️ 这两条英文是**英文档的正式名字**（拼音转写），不是"待翻译占位符"：
 #   本项目的原创神器没有官方英文译名，拼音是最不易产生歧义的写法。
@@ -20,10 +26,10 @@
 #
 
 diff --git a/texts/expansion/catalog.en.json b/texts/expansion/catalog.en.json
-index ff8191d..8d6360e 100644
+index ff8191d..4477b86 100644
 --- a/texts/expansion/catalog.en.json
 +++ b/texts/expansion/catalog.en.json
-@@ -155,6 +155,9 @@
+@@ -155,6 +155,10 @@
      "debug.confirm.green_blocked": "Apply G Block",
      "debug.status.turn": "TURN",
      "debug.mode.computer": "CPU",
@@ -31,6 +37,7 @@ index ff8191d..8d6360e 100644
 +    "debug.mode.blocked": "BLOCK",
 +
 +    "shanhe.item.pojun.name": "Pojun",
-+    "shanhe.item.zhaoye.name": "Zhaoye"
++    "shanhe.item.zhaoye.name": "Zhaoye",
++    "shanhe.item.zhaoye.desc": "Yu Cong's heirloom sword\nA sacred relic."
    }
  }

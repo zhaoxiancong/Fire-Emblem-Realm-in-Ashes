@@ -3,29 +3,40 @@
 # 目标文件: texts/expansion/catalog.zh-Hans.json
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
 #
-# 修什么: 给两个 key 补上**中文**正文 —— 照夜 / 破军。
-#   这就是玩家在背包 / 状态页 / 商店里真正看到的那两个字，是 2026-09-29
-#   缺陷（「主角背包里面没有照夜，而且突刺剑名字还没了」）的修复落点。
+# 修什么: 给三个 key 补上**中文**正文 —— 照夜显示名、破军显示名、以及照夜的
+#   **物品帮助框描述**（id 148）。
+#   前两条就是玩家在背包 / 状态页 / 商店里真正看到的那两个字，是 2026-09-29
+#   缺陷（「主角背包里面没有照夜，而且突刺剑名字还没了」）的修复落点；
+#   第三条是同日第二轮 P0b —— 玩家「看着像突刺剑」的可见来源之一正是
+#   物品帮助框下半那片空白，见 shanhe-item-desc-seam.patch。
 #
 # 为什么之前是空白（一句话）: 扩展槽道具的 ItemData.nameTextId 按框架策略恒为 0，
 #   而名字此前只写在仅有"内容档"才消费的 authoringName 里 ⇒ GetItemName() 的
 #   vanilla 回落取到消息 0 ⇒ 界面上没有字。详见 docs/5 §5.13 的复盘。
 #
-# 边界校验: registry 里两条的 max_width = 24、max_decoded_bytes = 24；
-#   实际 "照夜"/"破军" = 显示宽 4 / utf8 7 字节（含结尾 NUL），远在上界内。
-#   宽度口径与框架一致（东亚 W/F 记 2）—— 构建期由 scripts/localization/catalog.py
-#   校验，跑完再被 tools/shanhe-namecheck.py 的 C4/C7 独立复核。
+# 边界校验: registry 里两条名字的 max_width = 24、max_decoded_bytes = 24，
+#   描述那条 max_width = 24、max_decoded_bytes = 88。
+#   实测 "照夜"/"破军" = 显示宽 4 / utf8 7 字节（含结尾 NUL）；
+#   "守鼎人信物，虞聪的佩剑\n神器，不可出售" = 单行最宽 22、共 56 字节（含 NUL），
+#   远在上界内。宽度口径与框架一致（东亚 W/F 记 2、逐行校验，scripts/localization/
+#   catalog.py 的 _check_width_and_bytes）—— 构建期校验，跑完再被
+#   tools/shanhe-namecheck.py 的 C4/C7 独立复核。
 #
-# 一个 key 一条，追加在 strings 对象末尾；不删不改任何既有条目。
+# ⚠️ 描述正文里那个 `\n` 是**目录源的换行 token**：框架规定「换行是扩展目录唯一
+#   允许的控制字符」（scripts/localization/schema.py: ALLOWED_CONTROL_TOKENS），
+#   由 scripts/localization/generate.py 在生成期映射为引擎的 0x01 换行控制码。
+#   _check_parity 还要求 en 与 zh-Hans 的 `\n` 数量一致 —— 两条都是 1 个。
+#
+# 每 key 一条，追加在**文件末尾**（strings 对象的最后一条之后）；不删不改任何既有条目。
 #
 # 详见 docs/5 §5.14。
 #
 
 diff --git a/texts/expansion/catalog.zh-Hans.json b/texts/expansion/catalog.zh-Hans.json
-index 81616cb..396c835 100644
+index 81616cb..bd02243 100644
 --- a/texts/expansion/catalog.zh-Hans.json
 +++ b/texts/expansion/catalog.zh-Hans.json
-@@ -155,6 +155,9 @@
+@@ -155,6 +155,10 @@
      "debug.confirm.green_blocked": "应用绿军阻止",
      "debug.status.turn": "回合",
      "debug.mode.computer": "电脑",
@@ -33,6 +44,7 @@ index 81616cb..396c835 100644
 +    "debug.mode.blocked": "阻止",
 +
 +    "shanhe.item.pojun.name": "破军",
-+    "shanhe.item.zhaoye.name": "照夜"
++    "shanhe.item.zhaoye.name": "照夜",
++    "shanhe.item.zhaoye.desc": "守鼎人信物，虞聪的佩剑\n神器，不可出售"
    }
  }
