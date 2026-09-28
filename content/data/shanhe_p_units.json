@@ -1,0 +1,99 @@
+{
+  "$schema": "fe8.units.v1",
+  "groups": [
+    {
+      "symbol": "UnitDef_ShanheP_Ally",
+      "units": [
+        {
+          "charIndex": "CHARACTER_EIRIKA",
+          "classIndex": "CLASS_EIRIKA_LORD",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 1,
+          "xPosition": 3,
+          "yPosition": 5,
+          "redas": [ { "x": 3, "y": 5, "b": 65535 } ],
+          "items": ["ITEM_SWORD_IRON", "ITEM_VULNERARY"]
+        }
+      ]
+    },
+    {
+      "symbol": "UnitDef_ShanheP_Npc",
+      "units": [
+        {
+          "charIndex": "CHARACTER_DUESSEL",
+          "classIndex": "CLASS_GREAT_KNIGHT",
+          "allegiance": "FACTION_ID_GREEN",
+          "level": 1,
+          "xPosition": 6,
+          "yPosition": 4,
+          "redas": [ { "x": 6, "y": 4, "b": 65535 } ],
+          "items": ["ITEM_LANCE_IRON", "ITEM_VULNERARY"]
+        },
+        {
+          "charIndex": "CHARACTER_EWAN",
+          "classIndex": "CLASS_PUPIL",
+          "allegiance": "FACTION_ID_GREEN",
+          "level": 4,
+          "xPosition": 4,
+          "yPosition": 6,
+          "redas": [ { "x": 4, "y": 6, "b": 65535 } ],
+          "items": ["ITEM_ANIMA_THUNDER"]
+        }
+      ]
+    },
+    {
+      "symbol": "UnitDef_ShanheP_Enemy",
+      "units": [
+        {
+          "charIndex": 128,
+          "classIndex": "CLASS_REVENANT",
+          "allegiance": "FACTION_ID_RED",
+          "level": 1,
+          "xPosition": 4,
+          "yPosition": 2,
+          "redas": [ { "x": 4, "y": 2, "b": 65535 } ],
+          "items": ["ITEM_MONSTER_ROTTENCLW"],
+          "ai": [0, 3, 0, 0]
+        },
+        {
+          "charIndex": 129,
+          "classIndex": "CLASS_REVENANT",
+          "allegiance": "FACTION_ID_RED",
+          "level": 1,
+          "xPosition": 5,
+          "yPosition": 2,
+          "redas": [ { "x": 5, "y": 2, "b": 65535 } ],
+          "items": ["ITEM_MONSTER_ROTTENCLW"],
+          "ai": [0, 3, 0, 0]
+        },
+        {
+          "charIndex": 130,
+          "classIndex": "CLASS_REVENANT",
+          "allegiance": "FACTION_ID_RED",
+          "level": 1,
+          "xPosition": 6,
+          "yPosition": 3,
+          "redas": [ { "x": 6, "y": 3, "b": 65535 } ],
+          "items": ["ITEM_MONSTER_ROTTENCLW"],
+          "ai": [0, 3, 0, 0]
+        }
+      ]
+    },
+    {
+      "symbol": "UnitDef_ShanheP_Boss",
+      "units": [
+        {
+          "charIndex": "CHARACTER_ONEILL",
+          "classIndex": "CLASS_ENTOUMBED",
+          "allegiance": "FACTION_ID_RED",
+          "level": 3,
+          "xPosition": 9,
+          "yPosition": 5,
+          "redas": [ { "x": 9, "y": 5, "b": 65535 } ],
+          "items": ["ITEM_MONSTER_FETIDCLW"],
+          "ai": [3, 3, 0, 0]
+        }
+      ]
+    }
+  ]
+}

@@ -544,6 +544,11 @@ MERGED_COUNT=0
 SKIPPED_COUNT=0
 DATA_WRITTEN=0      # 只统计 data/*.json 的**实际写入数**（3a' 的门禁用它，不用 MERGED_COUNT）
 
+# ── 3a'' 的登记（声明提前到此处：3a 的「不在自动处理名单」warn 要用它）──
+#   详细设计见 3a'' 段与 tools/shanhe-content-tables.sh 头注释 / docs/5 §5.18。
+B3_NEW_DATA="${B3_NEW_DATA:-shanhe_p_units.json}"
+B3_INSTANCES="${B3_INSTANCES:-units:shanhe_p_units.json:src/shanhe_p_udefs.c}"
+
 # ── 3a. data/*.json 按语义合并 ──
 merge_json() {
   local name="$1" src="$CONTENT_DIR/data/$1" dst="$FRAMEWORK_DIR/src/data/$1"
@@ -790,9 +795,13 @@ if [ "$DRY_RUN" != "1" ] && [ "$DATA_WRITTEN" -gt 0 ] && [ -d "$FRAMEWORK_DIR/sc
     [ -f "$f" ] || continue
     base="$(basename "$f" .json)"
     case " $B2_TABLES " in
-      *" $base "*) ;;
-      *) warn "content/data/$base.json 不在自动处理名单（可能是章节表/新表）—— 请确认其落点与 round-trip 策略" ;;
+      *" $base "*) continue ;;
     esac
+    # 已由 3a'' 通道登记的新表不该再报"需人工确认"（登记本身就是那道人工闸）
+    case " $B3_NEW_DATA " in
+      *" $base.json "*) continue ;;
+    esac
+    warn "content/data/$base.json 不在自动处理名单（可能是章节表/新表）—— 请确认其落点与 round-trip 策略"
   done
 else
   # 2026-09-27 新增：内容一致时**整块跳过**。这不是"偷懒不做校验"，而是：
@@ -825,8 +834,19 @@ fi
 #     B3_INSTANCES  <表>:<JSON 文件名>:<框架内相对路径>
 # ★ 门禁与硬拦（落点写错=静默灾难）见 tools/shanhe-content-tables.sh 头注释；
 #   设计取舍与那个 inventory 坑见 docs/5 §5.18。
-B3_NEW_DATA="${B3_NEW_DATA:-}"
-B3_INSTANCES="${B3_INSTANCES:-}"
+# ★ 命名规则（2026-09-28 定）：章节内部名取自 docs/10 §3.2（序章 `ShanheP`、第 N 章
+#   `ShanheNN`），落盘时**全小写**并加下划线：`shanhe_p_units.json` → `src/shanhe_p_udefs.c`。
+#   之所以不是 docs/10 举例的 `ch0_units.json`：本项目的 C 落点统一走 `src/shanhe_*.c`
+#   前缀（工具的白名单硬拦 + 第 6 步反查白名单都认它），加前缀才不会与框架文件混淆。
+#
+# ⚠️ 与 3c 的耦合（2026-09-28 实测）：3c 会用「框架侧 `src/shanhe_*.c` 集合」与
+#    「`content/src/*.c` 映射后的集合」比对，不一致就 touch Makefile（重扫 wildcard）。
+#    本通道新增的 `src/shanhe_*.c` **不是** content/src 来的 ⇒ 若不把实例目标并进
+#    3c 的期望集合，会**每一轮都判定"集合有变化"⇒ 每轮全量重编**。已在 3c 处并入。
+B3_NEW_DATA="${B3_NEW_DATA:-shanhe_p_units.json}"
+B3_INSTANCES="${B3_INSTANCES:-units:shanhe_p_units.json:src/shanhe_p_udefs.c}"
+# （B3_NEW_DATA / B3_INSTANCES 的声明见第 3 步开头 —— 提前到那里是因为 3a 的
+#   「不在自动处理名单」warn 需要它）
 if [ "${CONTENT_TABLES:-1}" != "1" ]; then
   dim "content 自有表实例：CONTENT_TABLES=0，按开关跳过"
 else
@@ -1114,6 +1134,19 @@ if [ -d "$CONTENT_DIR/src" ] && [ -n "$(ls -A "$CONTENT_DIR/src" 2>/dev/null | g
   #   零内容变更也要赔上约 6 分钟。而 touch 的目的**仅仅**是让 make 在解析期
   #   重新展开 `$(wildcard src/*.c)`（只有**新增/删除** .c 才需要触发那个生成器）；
   #   文件**内容**变化已经由 write_if_changed 落盘时的新 mtime 自然触发，不需要动 Makefile。
+  # ★ 3a'' 生成的章节表 C 也落在 src/shanhe_*.c —— 必须一并计入「期望集合」，
+  #   否则每轮都会判定「集合有变化」⇒ 每轮 touch Makefile ⇒ 每轮全量重编（实测）。
+  #   只计入**框架侧确实存在**的目标（若 CONTENT_TABLES=0 且文件从未生成过，
+  #   就不该把它算进期望，否则同样会每轮误判）。
+  for _b3 in $B3_INSTANCES; do
+    _b3out="${_b3##*:}"
+    case "$_b3out" in
+      src/shanhe_*.c)
+        [ -f "$FRAMEWORK_DIR/$_b3out" ] && SRC_NAMES="$SRC_NAMES $(basename "$_b3out")" ;;
+    esac
+  done
+  unset _b3 _b3out
+
   HAVE_SRC="$(cd "$FRAMEWORK_DIR" && ls src/shanhe_*.c 2>/dev/null | sed 's|.*/||' | sort | tr '\n' ' ')"
   WANT_SRC="$(printf '%s\n' $SRC_NAMES | sed '/^$/d' | sort | tr '\n' ' ')"
   if [ "$DRY_RUN" = "1" ]; then
