@@ -23,7 +23,12 @@
 #   CLASH_PORT=7897       代理端口
 #   BUILD_TIMEOUT=1800    第 4 步 make 的硬超时秒数（默认 30 分钟；超时即中止，防无限悬挂）
 #   SHANHE_LOG_KEEP_BUILD=5   日志保留：build-*.log 份数（每次 3~5 MB，唯一的大件）
-#   SHANHE_LOG_KEEP_SMALL=20  日志保留：sync-/prewrite-/validate- 各份数（都是 KB 级）
+#   SHANHE_LOG_KEEP_SMALL=20  日志保留：sync-/prewrite-/validate-/content-table- 各份数（KB 级）
+#
+# 山河烬自有章节表的登记（3a'' 步；详见 tools/shanhe-content-tables.sh 头注释）
+#   B3_NEW_DATA="shanhe_units.json"                         # content/data 里的**框架侧不存在**的新表
+#   B3_INSTANCES="units:shanhe_units.json:src/shanhe_udefs.c"  # <表>:<JSON>:<框架内相对路径>
+#   CONTENT_TABLES=0                                        # 跳过整段
 #
 # 规范：docs/6.方案B内容外置规划.md §3
 # 依赖声明：framework.lock
@@ -136,7 +141,7 @@ ask_confirm() {  # $1 = 提示语（不含 "(y/N)"）
 # ── 日志保留策略（防止 $LOG_DIR 无限膨胀，2026-09-28 新增）──
 #   实测：build-*.log 每次构建 3~5 MB，是这里唯一的大件（17 份 = 45 MB）；
 #   sync-/prewrite-/validate- 都是 KB 级。所以按前缀分别设保留份数。
-#   安全边界：只匹配本脚本自己写出的 4 个前缀 + 只扫 $LOG_DIR 一层，
+#   安全边界：只匹配本脚本自己写出的 5 个前缀 + 只扫 $LOG_DIR 一层，
 #   目录下其它文件一律不动；本轮正在写的 $REPORT 也显式跳过。
 SHANHE_LOG_KEEP_BUILD="${SHANHE_LOG_KEEP_BUILD:-5}"
 SHANHE_LOG_KEEP_SMALL="${SHANHE_LOG_KEEP_SMALL:-20}"
@@ -174,6 +179,7 @@ prune_logs "$SHANHE_LOG_KEEP_BUILD" "build-"
 prune_logs "$SHANHE_LOG_KEEP_SMALL" "sync-"
 prune_logs "$SHANHE_LOG_KEEP_SMALL" "prewrite-"
 prune_logs "$SHANHE_LOG_KEEP_SMALL" "validate-"
+prune_logs "$SHANHE_LOG_KEEP_SMALL" "content-table-"
 
 if [ "${PRUNE_ONLY:-0}" = "1" ]; then
   printf "  日志目录：%s\n" "$LOG_DIR"
@@ -793,6 +799,52 @@ else
   # 校验的对象是"本次改动"，没有改动就没有新对象；而跑 generate 会刷新
   # build/generated/data/*.c 的 mtime 一旦刷新，会在框架侧制造无谓的写入事件（下游噪音）。
   [ "$DRY_RUN" = "1" ] || dim "锁定表处理：content/data 与框架逐字节一致（0 项写入）—— 跳过校验/回填（不落盘 ⇒ mtime 不动）"
+fi
+
+# ── 3a''. content 自有表实例（山河烬自己的章节表）──
+#
+# 与 3a' 的分工：
+#   3a'  管**框架共用的整文件全局表**（characters/classes/items/supports），
+#        目标是框架里**已经存在**的 src/data_<表>.c（整文件回填安全）。
+#   3a'' 管**山河烬自有的章节表**，目标是**新建立**的 src/shanhe_*.c。
+#
+# 为什么章节表走 3a'' 而不是塞进 3a'（2026-09-28 勘察，两条实测硬证据）：
+#   ① units/shops/traps 的 hand source 是 **partial-file** —— src/events_udefs.c
+#      75154 行里 Ch2 只是一个前缀切片，同一个文件还坐着 Ch3..Ch8/塔/遗迹。
+#      3a' 的整文件 `cp` 会把那些章节**全部抹掉**，所以 3a' 白名单只放 4 张整文件表。
+#   ② 但框架 modern 构建的 C 源集合是 `$(wildcard src/*.c)`（modern.mk:359）
+#      ⇒ 新增一个 `src/<名字>.c` **自动进构建**，无需改 Makefile、无需发框架补丁；
+#      而上游自己给章节单位用的就是**每章一个整文件**
+#      （src/events/prologue-eventudefs.h / ch1-eventudefs.h）。
+#   ⇒ 「partial-file」不是框架硬约束，只是 Ch2 那次迁移的实现选择。山河烬自己的
+#      章节表不必去挤它：直接「JSON → 100% 生成的自有整文件 src/shanhe_*.c」。
+#
+# ★ 登记是两处（少一处即不生效；3a 的「不在自动处理名单」warn 会提醒）：
+#     B3_NEW_DATA   原创新表（框架侧不存在的 JSON）—— 这道人工闸对应
+#                   merge_json 里那句「原创新表需人工确认落点」
+#     B3_INSTANCES  <表>:<JSON 文件名>:<框架内相对路径>
+# ★ 门禁与硬拦（落点写错=静默灾难）见 tools/shanhe-content-tables.sh 头注释；
+#   设计取舍与那个 inventory 坑见 docs/5 §5.18。
+B3_NEW_DATA="${B3_NEW_DATA:-}"
+B3_INSTANCES="${B3_INSTANCES:-}"
+if [ "${CONTENT_TABLES:-1}" != "1" ]; then
+  dim "content 自有表实例：CONTENT_TABLES=0，按开关跳过"
+else
+  act "content 自有表实例（山河烬章节表）…"
+  B3_LOG="$LOG_DIR/content-table-$STAMP-run.log"
+  env CONTENT_TABLES=1 B3_NEW_DATA="$B3_NEW_DATA" B3_INSTANCES="$B3_INSTANCES" \
+      REPO_ROOT="$REPO_ROOT" CONTENT_DIR="$CONTENT_DIR" FRAMEWORK_DIR="$FRAMEWORK_DIR" \
+      LOG_DIR="$LOG_DIR" STAMP="$STAMP" DRY_RUN="$DRY_RUN" \
+      bash "$REPO_ROOT/tools/shanhe-content-tables.sh" > "$B3_LOG" 2>&1
+  B3_RC=$?
+  cat "$B3_LOG"                       # 控制台：原样（保留颜色）
+  _plain < "$B3_LOG" >> "$REPORT"     # 日志：去色
+  case "$B3_RC" in
+    0) ;;
+    3) warn "content 自有表实例：前置缺失，已跳过（不影响产物正确性）" ;;
+    *) bad "content 自有表实例失败（rc=$B3_RC）"
+       die "章节表未通过门禁 —— 修法见 tools/shanhe-content-tables.sh 头注释与 docs/5 §5.18" ;;
+  esac
 fi
 
 # ── 3b. texts/ 合并 ──
