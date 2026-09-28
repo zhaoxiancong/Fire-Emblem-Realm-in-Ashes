@@ -1,0 +1,95 @@
+{
+  "checkpoints": [
+    {
+      "frame": 1000,
+      "framebuffer_hash": "fnv1a64-rgb24:24e8aa93b2bde765",
+      "name": "mode-select-shown",
+      "probes": [],
+      "regions": [
+        {
+          "hash": "fnv1a64-region:1933f11417f8c46b",
+          "height": 20,
+          "name": "easy-row",
+          "width": 104,
+          "x": 28,
+          "y": 52
+        },
+        {
+          "hash": "fnv1a64-region:0c31b198d3aaed19",
+          "height": 20,
+          "name": "hard-row",
+          "width": 104,
+          "x": 28,
+          "y": 112
+        },
+        {
+          "hash": "fnv1a64-region:ebc8bdcbb5557f6a",
+          "height": 20,
+          "name": "normal-row",
+          "width": 104,
+          "x": 28,
+          "y": 82
+        }
+      ]
+    },
+    {
+      "frame": 1140,
+      "framebuffer_hash": "fnv1a64-rgb24:fd1bf7da46d3f720",
+      "name": "slot-list-shown",
+      "probes": [],
+      "regions": [
+        {
+          "hash": "fnv1a64-region:57cccd178142fdfd",
+          "height": 20,
+          "name": "slot-0",
+          "width": 184,
+          "x": 31,
+          "y": 48
+        },
+        {
+          "hash": "fnv1a64-region:587bf08a24d2a660",
+          "height": 20,
+          "name": "slot-1",
+          "width": 184,
+          "x": 31,
+          "y": 78
+        },
+        {
+          "hash": "fnv1a64-region:78bff184dbe380ff",
+          "height": 20,
+          "name": "slot-2",
+          "width": 184,
+          "x": 31,
+          "y": 108
+        }
+      ],
+      "sram_hash": "fnv1a64-sram-normalized:6986f1e1a9e84dc4"
+    },
+    {
+      "frame": 1400,
+      "framebuffer_hash": "fnv1a64-rgb24:4d6e73e308b75b68",
+      "name": "new-game-created",
+      "probes": [
+        {
+          "address": "gPlaySt+0x12",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "gPlaySt+0x13",
+          "size": 1,
+          "value": "0x00"
+        }
+      ],
+      "sram_hash": "fnv1a64-sram-normalized:6986f1e1a9e84dc4"
+    }
+  ],
+  "format_version": 2,
+  "rom": {
+    "game_code": "BE8E",
+    "sha1": "5b7aabdb9ad9725b5f7404bd64f23ff710159805",
+    "size": 33554432,
+    "title": "FIREEMBLEM2E"
+  },
+  "scenario": "shanhe-boot"
+}
