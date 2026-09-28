@@ -63,7 +63,7 @@
           "y": 108
         }
       ],
-      "sram_hash": "fnv1a64-sram-normalized:6986f1e1a9e84dc4"
+      "sram_hash": "fnv1a64-sram-normalized:c39ca0f5e40ed115"
     },
     {
       "frame": 1400,
@@ -71,23 +71,23 @@
       "name": "new-game-created",
       "probes": [
         {
-          "address": "gPlaySt+0x12",
+          "address": "gPlaySt+0x0e",
           "size": 1,
           "value": "0x00"
         },
         {
-          "address": "gPlaySt+0x13",
+          "address": "gPlaySt+0x0f",
           "size": 1,
           "value": "0x00"
         }
       ],
-      "sram_hash": "fnv1a64-sram-normalized:6986f1e1a9e84dc4"
+      "sram_hash": "fnv1a64-sram-normalized:c39ca0f5e40ed115"
     }
   ],
   "format_version": 2,
   "rom": {
     "game_code": "BE8E",
-    "sha1": "5b7aabdb9ad9725b5f7404bd64f23ff710159805",
+    "sha1": "dda6355f7d052e6642dd5277c916679a32e997f5",
     "size": 33554432,
     "title": "FIREEMBLEM2E"
   },

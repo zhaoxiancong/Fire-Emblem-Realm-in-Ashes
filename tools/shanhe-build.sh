@@ -11,6 +11,10 @@
 #   RESTORE=1 bash tools/shanhe-build.sh       # 一键还原框架到 framework.lock 的上游状态
 #   SKIP_BUILD=1 bash tools/shanhe-build.sh    # 只铺设不构建（调试合并逻辑用）
 #   PRUNE_ONLY=1 bash tools/shanhe-build.sh    # 只跑日志清理（见下方「日志保留策略」），不构建
+#   ASSUME_YES=1 bash tools/shanhe-build.sh    # ★ 非交互运行（AI/CI/管道）**必须**加
+#                                              #   否则遇到「框架不干净，继续？」这类
+#                                              #   确认会**永久挂起**（stdin 非 TTY 时
+#                                              #   `read` 不返回 EOF，实测白等 16 分钟）
 #
 # 环境变量可覆盖：
 #   FRAMEWORK_DIR=/path   框架位置（默认 $HOME/projects/fireemblem8-expansion）
@@ -72,6 +76,34 @@ dim()  { printf "  %s%s%s\n" "$c_dim" "$1" "$c_off";      printf "       %s\n" "
 act()  { printf "  %s→%s %s\n" "$c_cyan" "$c_off" "$1";   printf "  [>]  %s\n" "$1" >> "$REPORT"; }
 
 die() { bad "$1"; printf "\n  日志：%s\n" "$REPORT"; exit 1; }
+
+# ── 非交互保护（2026-09-29 实测新增）──
+#   缺陷现场：框架工作区「不干净」时会弹「继续？(y/N)」，而 `read -r` 在
+#   **stdin 不是 TTY** 时不会返回 EOF 就退出，而是永久阻塞 —— 表现为
+#   「脚本活着但没有任何子进程」，白等 16 分钟才被发现（wchan=anon_pipe_read）。
+#   这也解释了为什么在 AI/CI/管道里驱动它必须显式给输入。
+#   对策三步：① 加 ASSUME_YES=1 开关自动确认；
+#            ② stdin 非 TTY 且未开开关 → **立刻 exit 2**，绝不静默等待；
+#            ③ 交互时保持原样（默认 N，回车即安全中止）。
+ASSUME_YES="${ASSUME_YES:-0}"
+ask_confirm() {  # $1 = 提示语（不含 "(y/N)"）
+  if [ "$ASSUME_YES" = "1" ]; then
+    printf "\n  %s→ %s (y/N) %s\n" "$c_yellow" "$1" "$c_off"
+    printf "    %s[ASSUME_YES=1] 自动确认 y%s\n" "$c_dim" "$c_off"
+    printf "  [>] LIVE 确认：%s → ASSUME_YES=1 自动 y\n" "$1" >> "$REPORT"
+    return 0
+  fi
+  if [ ! -t 0 ]; then
+    printf "\n  %s✗%s 需要交互确认，但 stdin 不是 TTY —— 拒绝静默等待。\n" "$c_red" "$c_off" >&2
+    printf "    待确认：%s\n" "$1" >&2
+    printf "    非交互运行请显式加： %sASSUME_YES=1 bash tools/shanhe-build.sh%s\n\n" "$c_cyan" "$c_off" >&2
+    printf "  [X] 非交互且需确认（%s）→ exit 2\n" "$1" >> "$REPORT"
+    exit 2
+  fi
+  printf "\n  %s→ %s (y/N) %s" "$c_yellow" "$1" "$c_off"
+  read -r ans
+  case "$ans" in y|Y) return 0 ;; *) return 1 ;; esac
+}
 
 # ── 日志保留策略（防止 $LOG_DIR 无限膨胀，2026-09-28 新增）──
 #   实测：build-*.log 每次构建 3~5 MB，是这里唯一的大件（17 份 = 45 MB）；
@@ -280,12 +312,9 @@ if [ "$RESTORE" = "1" ]; then
   warn "以下文件将被还原到 framework.lock 的上游状态（丢弃本地改动）："
   printf '%s\n' "$DIRTY" | sed 's/^/      /' | tee -a "$REPORT"
   printf "\n"
-  printf "  %s→ 确认还原？(y/N) %s" "$c_yellow" "$c_off"
-  read -r ans
-  case "$ans" in
-    y|Y) ;;
-    *) bad "已取消，未做任何改动"; exit 0 ;;
-  esac
+  if ! ask_confirm "确认还原？（将丢弃框架侧本地改动）"; then
+    bad "已取消，未做任何改动"; exit 0
+  fi
 
   # 三级递进还原（对 skip-worktree/assume-unchanged 也有效）
   act "git checkout HEAD -- ."
@@ -379,9 +408,7 @@ if [ -n "$DIRTY" ]; then
   printf "\n"
   dim "如果是上次脚本铺的内容 → 正常，继续即可（本次会重新铺一遍）"
   dim "如果多数文件你没印象 → 警惕，先跑 RESTORE=1 归零再重来"
-  printf "\n  %s→ 继续？(y/N) %s" "$c_yellow" "$c_off"
-  read -r ans
-  case "$ans" in y|Y) ;; *) bad "已中止"; exit 1 ;; esac
+  ask_confirm "继续？" || { bad "已中止"; exit 1; }
 else
   ok "框架工作区干净"
 fi
@@ -577,8 +604,8 @@ else:
     #   它是**扩展 overlay 表**（只含 ID >= 0xCE 的《山河烬》原创道具），
     #   **不曾承载任何原版内容**（原版 206 条在 items.json，不在本表）。
     #   框架自带一条样例记录 ITEM_EXPANSION_CE，本项目已用补丁把该符号改名
-    #   （shanhe-item-id-pojun.patch）⇒ 若走"按键追加"，框架那条样例会**残留**
-    #   一个指向已不存在符号的记录 ⇒ 编译失败。整表替换让它被自然覆盖，零孤儿。
+    #   （shanhe-item-ids.patch，0xCE 破军 / 0xCF 照夜）⇒ 若走"按键追加"，
+    #   框架那条样例会**残留**一个指向已不存在符号的记录 ⇒ 编译失败。整表替换让它被自然覆盖，零孤儿。
     WHOLE_TABLE_REPLACE = ("weapontriangle.json", "items_expansion.json")
     if name in WHOLE_TABLE_REPLACE:
         new_list = patch.get(lk)

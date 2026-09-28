@@ -1,0 +1,58 @@
+# 山河烬 框架补丁: shanhe-item-ids
+#
+# 目标文件: include/constants/items_expansion.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 让框架"扩展道具槽"枚举承载本项目的两件原创神器 ——
+#   `ITEM_SHANHE_POJUN  = 0xCE`（破军，秦红缨的枪，第 3 章秦父遗物）
+#   `ITEM_SHANHE_ZHAOYE = 0xCF`（照夜，虞聪的剑，序章持有，第 17 章觉醒为明烛）
+#   两行都只是**给已存在的空槽起名**，不新增 ID 空间。
+#
+# 为什么 0xCE / 0xCF 可用（2026-09-25 实测依据）:
+#   ① 原版 `include/constants/items.h` 的枚举止于 `ITEM_UNK_CD = 0xCD`
+#      （第 239 行），原版 `src/data/items.json` 正好 206 条（0x00~0xCD）
+#      ⇒ 0xCE 是第一块真正的空位。
+#   ② 框架原枚举里的 `ITEM_EXPANSION_CE`（authoringName "Sample Charm"）是给
+#      `EXPANSION_STARTER_CONTENT=1` 档准备的**示例**。本项目**不开**该开关
+#      ⇒ 样例在 ROM 里只是一条**无机制的孤儿数据**，占着 0xCE 纯属浪费。
+#   ③ 存储代价为 0：`ItemId` 是 u8（id_space.h ITEM_ID_STORAGE_BITS=8），
+#      存档字段是 14-bit（item_fits_save14 断言）⇒ 0xCE/0xCF 不增加任何存档
+#      字节，**不破存档兼容**（对比：扩武器类型要动 ranks[8]，老档全废）。
+#
+# 配套（缺一不生效）:
+#   · `content/data/items_expansion.json` —— 两条记录的实际数值（内容外置通道，
+#     构建第 3a 步整表替换框架的 src/data/items_expansion.json）。
+#   · 构建开关 `FE8_ITEM_ID_CAP=0xCF`（framework.lock [features].item_id_cap）——
+#     让 ITEM_ID_CONFIGURED_CAP 真正覆盖 0xCF；默认 0xCD 时任何引用都会被
+#     id_space.h 的 cap 静态断言在编译期挡下。
+#   · `shanhe-prologue-zhaoye.patch` —— 序章事件改为发放照夜。
+#   · M3② 本体另需 `EXPANSION_MECHANICS_HOOKS=1`（神器加成走机制钩子）。
+#
+# ⚠️ 为何在扩展头里定义而不改 items.h：保持"原版枚举不动"的框架惯例 ——
+#   默认构建不 include 本头文件，误引用扩展 ID 会在编译期早失败。
+#
+# ⚠️ 历史：本补丁前身名为 `shanhe-item-id-pojun.patch`（只承载 0xCE）；
+#   2026-09-29 加入照夜（0xCF）时改名。补丁按 `*.patch` 通配收集、顺序无关，
+#   且构建第 6 步的"目标文件"是**从补丁实时解析**的，不写死在白名单里。
+#
+# 上游若自行引入等价机制，本补丁可删除。详见 docs/5 §5.9 / §5.12。
+#
+diff --git a/include/constants/items_expansion.h b/include/constants/items_expansion.h
+index 1f04c57..9f6e31f 100644
+--- a/include/constants/items_expansion.h
++++ b/include/constants/items_expansion.h
+@@ -15,7 +15,13 @@
+  * see reports/id_space_audit.md, item domain.
+  */
+ enum {
+-    ITEM_EXPANSION_CE = 0xCE,
++    /* Shanhe: the first expansion slot (0xCE) carries the project's first
++     * original divine relic, "Pojun" -- a lance, Qin Hongying's
++     * inheritance in chapter 3. See docs/3 section 3.2, docs/5 section 5.9. */
++    ITEM_SHANHE_POJUN = 0xCE,
++    /* Shanhe: the second expansion slot (0xCF) carries "Zhaoye", the
++     * heirloom sword Yu Cong carries from the prologue (docs/3 s3.2). */
++    ITEM_SHANHE_ZHAOYE = 0xCF,
+ };
+ 
+ #endif /* GUARD_CONSTANTS_ITEMS_EXPANSION_H */

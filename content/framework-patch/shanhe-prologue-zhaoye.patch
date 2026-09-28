@@ -1,0 +1,49 @@
+# 山河烬 框架补丁: shanhe-prologue-zhaoye
+#
+# 目标文件: src/events/prologue-eventscript.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么（2 处）:
+#   ① 补 `#include "constants/items_expansion.h"` —— 该文件原本只含
+#      constants/items.h，不含扩展头 ⇒ 直接引用 ITEM_SHANHE_ZHAOYE 编译失败。
+#   ② `EventScr_Prologue_GiveRapier` 里把发放的 `ITEM_SWORD_RAPIER` 换成
+#      `ITEM_SHANHE_ZHAOYE`（照夜）—— 虞聪的初始武器回到设计态。
+#
+# 依据: docs/3 §3.2 神器表「照夜→明烛｜剑｜虞聪｜**序章持有**，第 17 章觉醒」；
+#   docs/4 §4 M2 遗留项「① 初始武器（照夜，待 M3 神器机制一起做）」。
+#   本补丁即该遗留项落地，同时把 M3 交付物③「神器首件」变成可玩到的东西 ——
+#   也是"可演示入口"纪律（D-7）在内容层的第一次兑现。
+#
+# ⚠️ 已知不圆（有意留，勿当 bug）:
+#   · 事件函数名仍叫 `EventScr_Prologue_GiveRapier`（改名要连带动调用点，
+#     为最小 diff 暂留）。
+#   · 该事件随附对话文本 id `0x90F` 未同步改 —— 若其文案提到细剑，需在文本
+#     通道另行覆盖。见 docs/5 §5.12.5 待办。
+#
+# ⚠️ 为什么序章只能走补丁：序章单位/事件是**手写头文件**，不是 JSON 表；
+#   框架的 `src/data/ch2_units.json` 才是 JSON 单位通道，且只覆盖第 2 章。
+#   ⇒ 改初始装备只能改框架文件，属"第 3 类已知偏离"。
+#
+# 上游若自行引入等价机制，本补丁可删除。详见 docs/5 §5.12。
+#
+diff --git a/src/events/prologue-eventscript.h b/src/events/prologue-eventscript.h
+index e338864..a28d88b 100644
+--- a/src/events/prologue-eventscript.h
++++ b/src/events/prologue-eventscript.h
+@@ -10,6 +10,7 @@
+ #include "constants/characters.h"
+ #include "constants/backgrounds.h"
+ #include "constants/items.h"
++#include "constants/items_expansion.h"
+ #include "constants/songs.h"
+ #include "constants/chapters.h"
+ 
+@@ -213,7 +214,7 @@ CONST_DATA EventListScr EventScr_Prologue_GiveRapier[] = {
+     CALL(EventScr_RemoveBGIfNeeded)
+ 
+     /* Give item via slot3 */
+-    SVAL(EVT_SLOT_3, ITEM_SWORD_RAPIER)
++    SVAL(EVT_SLOT_3, ITEM_SHANHE_ZHAOYE)
+     GIVEITEMTO(CHARACTER_EIRIKA)
+ 
+     SVAL(EVT_SLOT_2, EventScr_Prologue_9EF828)

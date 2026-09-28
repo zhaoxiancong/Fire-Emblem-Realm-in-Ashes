@@ -52,6 +52,10 @@ rom_header_game_code  = BE8E
 # 术语（相对配置，不是绝对常量）：
 #   item_id_cap   道具 ID 上限，覆盖 include/id_space.h 的默认 0xCD。
 #                 0xCE = 放开第一块扩展槽（M3③：原创神器「破军」占 0xCE）。
+#                 0xCF = 放开两格（2026-09-29 新增 0xCF =「照夜」，M2 遗留项
+#                        「序章初始武器」，也是 M3② 神器加成机制的首个实机可见载体）。
+#                 原版 enum 止于 ITEM_UNK_CD(0xCD) ⇒ 0xCE/0xCF 是头两个真空闲槽；
+#                 ItemId 为 u8、存档字段 14 bit ⇒ **不进 RAM、不破存档**。
 #                 ⚠️ 仅现代车道支持；legacy/agbcc 会硬报错（generated_data.mk 已挡）。
 #   mechanics_hooks  链接战斗数值机制钩子注册表（include/expansion_mechanics.h）。
 #                    1 = 允许用 ExpansionMechanicsRegister() 注册原创机制（M3② 本体）。
@@ -65,7 +69,7 @@ rom_header_game_code  = BE8E
 #                       （见 docs/5 §5.11「第 4 类已知偏离」）。
 #                    ⚠️ 仅现代 AAPCS 车道支持；档案车道强制为 0。
 # ------------------------------------------------------------
-item_id_cap      = 0xCE
+item_id_cap      = 0xCF
 mechanics_hooks  = 1
 custom_spell_effects = 1
 # 以下保持框架默认（0 = 不链接框架自带样例，避免污染 ROM）：

@@ -1,0 +1,78 @@
+{
+  "checkpoints": [
+    {
+      "frame": 3000,
+      "framebuffer_hash": "fnv1a64-rgb24:c57232df478b3af4",
+      "name": "prologue-map-loaded",
+      "probes": [
+        {
+          "address": "gPlaySt+0x0e",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "gPlaySt+0x1b",
+          "size": 1,
+          "value": "0x01"
+        },
+        {
+          "address": "gUnitArrayBlue+0x1e",
+          "size": 2,
+          "value": "0x1e03"
+        },
+        {
+          "address": "gUnitArrayBlue+0x68",
+          "size": 2,
+          "value": "0x0000"
+        }
+      ]
+    },
+    {
+      "frame": 4000,
+      "framebuffer_hash": "fnv1a64-rgb24:93ca9270f0d02665",
+      "name": "zhaoye-granted",
+      "probes": [
+        {
+          "address": "gPlaySt+0x0e",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "gUnitArrayBlue+0x1e",
+          "size": 2,
+          "value": "0x1e03"
+        },
+        {
+          "address": "gUnitArrayBlue+0x68",
+          "size": 2,
+          "value": "0x2dcf"
+        }
+      ]
+    },
+    {
+      "frame": 4700,
+      "framebuffer_hash": "fnv1a64-rgb24:f85174681cca0d9a",
+      "name": "zhaoye-used-in-tutorial",
+      "probes": [
+        {
+          "address": "gPlaySt+0x0e",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "gUnitArrayBlue+0x68",
+          "size": 2,
+          "value": "0x2bcf"
+        }
+      ]
+    }
+  ],
+  "format_version": 2,
+  "rom": {
+    "game_code": "BE8E",
+    "sha1": "dda6355f7d052e6642dd5277c916679a32e997f5",
+    "size": 33554432,
+    "title": "FIREEMBLEM2E"
+  },
+  "scenario": "shanhe-prologue"
+}

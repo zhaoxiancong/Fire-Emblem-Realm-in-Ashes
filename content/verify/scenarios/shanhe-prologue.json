@@ -1,0 +1,724 @@
+{
+  "schema_version": 1,
+  "name": "shanhe-prologue",
+  "description": "《山河烬》L0 Rung-2：原创神器「照夜」在**正常流程**里真的到手了（不是只在 ROM 表里存在）。序章开局事件 EventScr_Prologue_GiveRapier 里把 SVAL(EVT_SLOT_3, ITEM_SWORD_RAPIER) 改成 ITEM_SHANHE_ZHAOYE(0xCF) 之后，用按帧内存探针直接读**虞聪的背包**：① prologue-map-loaded(3000) —— 序章地图已加载（gPlaySt+0x0e=0x00 序章、+0x1b=0x01 教学模式），此时虞聪 items[1] 仍是 0x0000，照夜**还没**到手；② zhaoye-granted(4000) —— 虞聪 items[1] 变成 0x2DCF，按框架的 ITEM_USES(aItem)=((aItem)>>8) 打包约定解读即 道具ID 0xCF（照夜）、剩余 45 次（= docs/3 设计的满耐久 45）；同一点上赛思 items[0] 恒为 0x1E03（钢剑 30 次）不变，证明道具给的是虞聪而非另一个单位；③ zhaoye-used-in-tutorial(4700) —— 变 0x2BCF（43 次），证明照夜是**可实际使用的武器**（教程的脚本化攻击真的扣了 2 次耐久），不是一个只在内存里躺着的数据条目。★ 探针只读 RAM（gUnitArrayBlue 是 EWRAM 里的 struct Unit[62]，items[0..4] 在结构内偏移 0x1E，每项 u16）；★ 单位身份由 pCharacterData 指针反查 ROM 角色表确认：slot1 -> row0(number=1=CHARACTER_EIRIKA/虞聪)、slot0 -> row1(number=2=CHARACTER_SETH/赛思)；★ 输入节奏与 shanhe-boot 同源，1400 帧后改为**周期性点按**——FE8 对白是边沿触发（KEY_NEW），按住不放只会推进一次，这一点在探索阶段实测踩过。",
+  "frames": [
+    {
+      "start": 90,
+      "end": 95,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 155,
+      "end": 160,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 220,
+      "end": 225,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 285,
+      "end": 290,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 350,
+      "end": 355,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 415,
+      "end": 420,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 480,
+      "end": 485,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 545,
+      "end": 550,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 950,
+      "end": 956,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1050,
+      "end": 1056,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1150,
+      "end": 1156,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1400,
+      "end": 1406,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1440,
+      "end": 1446,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1480,
+      "end": 1486,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1520,
+      "end": 1526,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 1560,
+      "end": 1566,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1600,
+      "end": 1606,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1640,
+      "end": 1646,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1680,
+      "end": 1686,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 1720,
+      "end": 1726,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1760,
+      "end": 1766,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1800,
+      "end": 1806,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1840,
+      "end": 1846,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 1880,
+      "end": 1886,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1920,
+      "end": 1926,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1960,
+      "end": 1966,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2000,
+      "end": 2006,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 2040,
+      "end": 2046,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2080,
+      "end": 2086,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2120,
+      "end": 2126,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2160,
+      "end": 2166,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 2200,
+      "end": 2206,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2240,
+      "end": 2246,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2280,
+      "end": 2286,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2320,
+      "end": 2326,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 2360,
+      "end": 2366,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2400,
+      "end": 2406,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2440,
+      "end": 2446,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2480,
+      "end": 2486,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 2520,
+      "end": 2526,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2560,
+      "end": 2566,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2600,
+      "end": 2606,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2640,
+      "end": 2646,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 2680,
+      "end": 2686,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2720,
+      "end": 2726,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2760,
+      "end": 2766,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2800,
+      "end": 2806,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 2840,
+      "end": 2846,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2880,
+      "end": 2886,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2920,
+      "end": 2926,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 2960,
+      "end": 2966,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 3000,
+      "end": 3006,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3040,
+      "end": 3046,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3080,
+      "end": 3086,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3120,
+      "end": 3126,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 3160,
+      "end": 3166,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3200,
+      "end": 3206,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3240,
+      "end": 3246,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3280,
+      "end": 3286,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 3320,
+      "end": 3326,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3360,
+      "end": 3366,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3400,
+      "end": 3406,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3440,
+      "end": 3446,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 3480,
+      "end": 3486,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3520,
+      "end": 3526,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3560,
+      "end": 3566,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3600,
+      "end": 3606,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 3640,
+      "end": 3646,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3680,
+      "end": 3686,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3720,
+      "end": 3726,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3760,
+      "end": 3766,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 3800,
+      "end": 3806,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3840,
+      "end": 3846,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3880,
+      "end": 3886,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 3920,
+      "end": 3926,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 3960,
+      "end": 3966,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4000,
+      "end": 4006,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4040,
+      "end": 4046,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4080,
+      "end": 4086,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 4120,
+      "end": 4126,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4160,
+      "end": 4166,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4200,
+      "end": 4206,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4240,
+      "end": 4246,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 4280,
+      "end": 4286,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4320,
+      "end": 4326,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4360,
+      "end": 4366,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4400,
+      "end": 4406,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 4440,
+      "end": 4446,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4480,
+      "end": 4486,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4520,
+      "end": 4526,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4560,
+      "end": 4566,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 4600,
+      "end": 4606,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4640,
+      "end": 4646,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 4680,
+      "end": 4686,
+      "keys": [
+        "A"
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "name": "prologue-map-loaded",
+      "frame": 3000,
+      "framebuffer": true,
+      "probes": [
+        {
+          "address": "gPlaySt+0x0e",
+          "size": 1
+        },
+        {
+          "address": "gPlaySt+0x1b",
+          "size": 1
+        },
+        {
+          "address": "gUnitArrayBlue+0x1e",
+          "size": 2
+        },
+        {
+          "address": "gUnitArrayBlue+0x68",
+          "size": 2
+        }
+      ]
+    },
+    {
+      "name": "zhaoye-granted",
+      "frame": 4000,
+      "framebuffer": true,
+      "probes": [
+        {
+          "address": "gPlaySt+0x0e",
+          "size": 1
+        },
+        {
+          "address": "gUnitArrayBlue+0x1e",
+          "size": 2
+        },
+        {
+          "address": "gUnitArrayBlue+0x68",
+          "size": 2
+        }
+      ]
+    },
+    {
+      "name": "zhaoye-used-in-tutorial",
+      "frame": 4700,
+      "framebuffer": true,
+      "probes": [
+        {
+          "address": "gPlaySt+0x0e",
+          "size": 1
+        },
+        {
+          "address": "gUnitArrayBlue+0x68",
+          "size": 2
+        }
+      ]
+    }
+  ]
+}

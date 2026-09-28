@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "shanhe-boot",
-  "description": "《山河烬》ROM 启动回归网（验证阶梯 L0 的第一级）。从冷启动走完 标题 -> New Game -> 难度 -> 空存档槽 三段普通 UI 输入，落三个检查点：(1) mode-select-shown —— 锁定**中文模式选择画面**的三行区域像素（新手/普通/困难），任何字库、字宽或本地化改动都会让它变色；(2) slot-list-shown —— 锁定三个存档槽为空时的整屏与 SRAM；(3) new-game-created —— 真实存档写入发生（SRAM 哈希必须与前一点不同），且 gPlaySt+0x12（chapterIndex）/ +0x13（faction）读回序章 0x00 / 我方 0x00。探针一律用**符号表达式**（gPlaySt+0x12），链接地址变化不影响语义；不使用任何存档文件、savestate 或生成二进制。注意：本场景只证明『启动链路与中文渲染没退化』，不证明原创机制 —— 机制断言见 shanhe-combat.json（Rung-2）。",
+  "description": "《山河烬》ROM 启动回归网（验证阶梯 L0 的第一级）。从冷启动走完 标题 -> New Game -> 难度 -> 空存档槽 三段普通 UI 输入，落三个检查点：(1) mode-select-shown —— 锁定**中文模式选择画面**的三行区域像素（新手/普通/困难），任何字库、字宽或本地化改动都会让它变色；(2) slot-list-shown —— 锁定三个存档槽为空时的整屏与 SRAM；(3) new-game-created —— 真实存档写入发生（SRAM 哈希必须与前一点不同），且 gPlaySt+0x0e（chapterIndex）与 +0x0f（faction）读回序章 0x00 / 我方 0x00，证明新建存档确实从序章开始。探针一律用**符号表达式**（gPlaySt+0x0e），链接地址变化不影响语义；不使用任何存档文件、savestate 或生成二进制。【2026-09-29 勘误】早期版本把这两条探针写成 gPlaySt+0x12/+0x13 并标注为 chapterIndex/faction —— 那是照抄上游 new-game.json 的描述，**字段归属是错的**：按 include/types.h 的 struct PlaySt 布局，+0x12/+0x13 是地图光标 xCursor/yCursor，chapterIndex 在 +0x0e、faction 在 +0x0f（上游那个场景因为两者恰好都读到 0x00 而没暴露）。现已改为真实偏移。注意：本场景只证明『启动链路与中文渲染没退化』，不证明原创机制 —— 机制断言见 shanhe-prologue.json（Rung-2）。",
   "frames": [
     { "start": 90,   "end": 95,   "keys": ["A"] },
     { "start": 155,  "end": 160,  "keys": ["START"] },
@@ -48,8 +48,8 @@
       "frame": 1400,
       "framebuffer": true,
       "probes": [
-        { "address": "gPlaySt+0x12", "size": 1 },
-        { "address": "gPlaySt+0x13", "size": 1 }
+        { "address": "gPlaySt+0x0e", "size": 1 },
+        { "address": "gPlaySt+0x0f", "size": 1 }
       ],
       "sram_hash": true,
       "sram_hash_exclude_ranges": [
