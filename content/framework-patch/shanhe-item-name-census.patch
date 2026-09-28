@@ -1,0 +1,64 @@
+# 山河烬 框架补丁: shanhe-item-name-census
+#
+# 目标文件: scripts/generated_data/consumer_classification.json
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 给本项目新增的 `ShanheItemName(ItemId)` 登记两条**消费者普查分类**。
+#
+# 为什么必须登记（构建真的会失败，不是文档要求）:
+#   框架的 `scripts/generated_data/idspace.py` 在生成
+#   `build/generated/data/id_space_active.h`（id 域"活跃契约"）时会跑
+#   `scripts/generated_data/consumer_census.py` 扫描 include/ src/ asm/ tools/，
+#   要求**每一处** id 域消费者都被分类。未分类即硬失败：
+#     scripts.generated_data.consumer_census.CensusError:
+#       unclassified consumer hit 'src/bmitem.c|function-signature|item|ShanheItemName'
+#       ... classify it in scripts/generated_data/consumer_classification.json
+#   （2026-09-29 实测：本次构建正是在编译到第 400 个 .c 时撞在这条门上。）
+#
+# 为什么是 ui-buffer 而不是 bootstrap 提案的 external-interface:
+#   bootstrap 的分类是**按文件名/符号名 token 猜的**（框架注释写明"a human still
+#   reviews every row"）。本函数的产物正是**界面显示名的可写缓冲**，与框架自己给
+#   `ItemData.nameTextId` 的分类完全同族 —— 见 reports/id_space_audit.md：
+#     | item | ui-buffer | include/bmitem.h | ItemData.nameTextId (u16) + iconId (u8) |
+#   故人工改为 ui-buffer。
+#
+# 为什么只有 2 行（不是照抄 bootstrap 的整份输出）:
+#   `bootstrap` 会按框架自己的 canonical 排序**重排整份文件**，产生 8 条与本议题
+#   无关的错位（本仓库提交的那版不是这种排序）。按框架注释的本意逐条人工追加，
+#   改动最小、可逐行复核。
+#
+# 复核: `python3 -m scripts.generated_data.consumer_census check`
+#   → consumer census clean: 1142 hit(s), 1095 audited, 47 reviewed-exclusion,
+#     digest d6b7a1bf…
+#
+# 配套: shanhe-item-name-seam.patch / -msg.patch（真正引入该函数的那两个补丁）。
+#
+# 详见 docs/5 §5.14、docs/6 §3.4g。
+#
+
+diff --git a/scripts/generated_data/consumer_classification.json b/scripts/generated_data/consumer_classification.json
+index 3c4ca41..51e9c4f 100644
+--- a/scripts/generated_data/consumer_classification.json
++++ b/scripts/generated_data/consumer_classification.json
+@@ -3657,6 +3657,10 @@
+       "category": "lookup-table",
+       "reason": null
+     },
++    "src/bmitem.c|function-signature|item|ShanheItemName": {
++      "category": "ui-buffer",
++      "reason": null
++    },
+     "src/bmshop.c|data-symbol|item|gDefaultShopInventory": {
+       "category": "lookup-table",
+       "reason": null
+@@ -4021,6 +4025,10 @@
+       "category": "lookup-table",
+       "reason": null
+     },
++    "src/msg.c|function-signature|item|ShanheItemName": {
++      "category": "ui-buffer",
++      "reason": null
++    },
+     "src/prep_itemscreen.c|data-symbol|item|gPrepShopInventory": {
+       "category": "lookup-table",
+       "reason": null

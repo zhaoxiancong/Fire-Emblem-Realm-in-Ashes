@@ -1,0 +1,36 @@
+# 山河烬 框架补丁: shanhe-expansion-catalog-en
+#
+# 目标文件: texts/expansion/catalog.en.json
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 给 shanhe-expansion-registry.patch 注册的两个 key 补上**英文**正文。
+#
+# 为什么英文是必需的: 框架的脚本规定 AUTHORED_CATALOG_LOCALES 里只有 `en`
+#   **必须齐全**（scripts/localization/catalog.py：其余语言允许缺 key，运行时按
+#   key 单跳回退英文）。所以这两条英文是"最后一道兜底" —— 别的语言缺 key 时，
+#   玩家看到的仍是一个真实名字，而不是空串或缺字标记。
+#
+# ⚠️ 这两条英文是**英文档的正式名字**（拼音转写），不是"待翻译占位符"：
+#   本项目的原创神器没有官方英文译名，拼音是最不易产生歧义的写法。
+#   工具侧有两条约束防止它掩盖"忘了写中文"：
+#   · tools/shanhe-namecheck.py 的 C8 要求 zh-Hans 档的名字必须是**非 ASCII**；
+#   · C6 要求每个启用语言的正文都非空（缺 key 回退英文也算不合格）。
+#
+# 详见 docs/5 §5.14。
+#
+
+diff --git a/texts/expansion/catalog.en.json b/texts/expansion/catalog.en.json
+index ff8191d..8d6360e 100644
+--- a/texts/expansion/catalog.en.json
++++ b/texts/expansion/catalog.en.json
+@@ -155,6 +155,9 @@
+     "debug.confirm.green_blocked": "Apply G Block",
+     "debug.status.turn": "TURN",
+     "debug.mode.computer": "CPU",
+-    "debug.mode.blocked": "BLOCK"
++    "debug.mode.blocked": "BLOCK",
++
++    "shanhe.item.pojun.name": "Pojun",
++    "shanhe.item.zhaoye.name": "Zhaoye"
+   }
+ }

@@ -1,62 +1,48 @@
 {
   "schema_version": 1,
   "name": "shanhe-prologue",
-  "description": "《山河烬》L0 Rung-2：原创神器「照夜」在**正常流程**里真的到手了（不是只在 ROM 表里存在）。序章开局事件 EventScr_Prologue_GiveRapier 里把 SVAL(EVT_SLOT_3, ITEM_SWORD_RAPIER) 改成 ITEM_SHANHE_ZHAOYE(0xCF) 之后，用按帧内存探针直接读**虞聪的背包**：① prologue-map-loaded(3000) —— 序章地图已加载（gPlaySt+0x0e=0x00 序章、+0x1b=0x01 教学模式），此时虞聪 items[1] 仍是 0x0000，照夜**还没**到手；② zhaoye-granted(4000) —— 虞聪 items[1] 变成 0x2DCF，按框架的 ITEM_USES(aItem)=((aItem)>>8) 打包约定解读即 道具ID 0xCF（照夜）、剩余 45 次（= docs/3 设计的满耐久 45）；同一点上赛思 items[0] 恒为 0x1E03（钢剑 30 次）不变，证明道具给的是虞聪而非另一个单位；③ zhaoye-used-in-tutorial(4700) —— 变 0x2BCF（43 次），证明照夜是**可实际使用的武器**（教程的脚本化攻击真的扣了 2 次耐久），不是一个只在内存里躺着的数据条目。★ 探针只读 RAM（gUnitArrayBlue 是 EWRAM 里的 struct Unit[62]，items[0..4] 在结构内偏移 0x1E，每项 u16）；★ 单位身份由 pCharacterData 指针反查 ROM 角色表确认：slot1 -> row0(number=1=CHARACTER_EIRIKA/虞聪)、slot0 -> row1(number=2=CHARACTER_SETH/赛思)；★ 输入节奏与 shanhe-boot 同源，1400 帧后改为**周期性点按**——FE8 对白是边沿触发（KEY_NEW），按住不放只会推进一次，这一点在探索阶段实测踩过。",
+  "description": "《山河烬》L0 Rung-2：原创神器「照夜」在**正常流程**里到手，并且**以中文名被游戏自己解析出来**。\n\n序章开局事件 EventScr_Prologue_GiveRapier 把 SVAL(EVT_SLOT_3, ITEM_SWORD_RAPIER) 改成 ITEM_SHANHE_ZHAOYE(0xCF) 之后，用按帧内存探针直接读**虞聪的背包**：\n① prologue-map-loaded(3000) —— 序章地图已加载（gPlaySt+0x0e=0x00 序章、+0x1b=0x01 教学模式），虞聪 items[1] 仍是 0x0000，照夜**还没**到手；\n② zhaoye-granted(3700) —— 虞聪 items[1] = 0x2DCF，按框架 ITEM_USES(aItem)=((aItem)>>8) 打包约定解读即 道具ID 0xCF（照夜）、剩余 45 次（= docs/3 设计的满耐久 45）；同一点上赛思 items[0] 恒为 0x1E03（钢剑 30 次）不变，证明道具给的是虞聪而非另一个单位；\n③ zhaoye-used-in-tutorial(4700) —— 变 0x2BCF（43 次），证明照夜是**可实际使用的武器**（教程的脚本化攻击真的扣了 2 次耐久），不是一个只在内存里躺着的数据条目。\n\n★★ 道具名的全链路断言（2026-09-28 补，D-8「可在游戏内看到**或**可被断言」）：内存里有一个道具**不等于**玩家看得见它 —— 扩展道具（item >= 0xCE）按框架策略 nameTextId=0，若不额外接名字通道，背包里就是一个**空白条目**（这正是玩家报的缺陷：「主角背包里面没有照夜，而且突刺剑名字还没了」—— 那个槽位原本是 Rapier/「突刺剑」，序章改成发照夜后就整格没了名字）。现在名字走框架**扩展文本目录**（texts/expansion/），由 ShanheItemName(ItemId)（content/src/shanhe_item_names.c）在运行时 ExpansionLocale_ResolveCurrentPersistent 解析后拷进可写缓冲。本场景因此额外断言：\n   sShanheItemNameBuffer+0x00/+0x02/+0x04 = 0x85E7 / 0xE5A7 / 0x9CA4\n   —— 即字节 E7 85 A7 E5 A4 9C，UTF-8 的「照夜」本体。缓冲是**游戏自己的解析结果**，不是我们另写一份字符串去比对，所以它同时证明了：目录条目进 ROM、运行时查找成功、bmitem.c 的 GetItemName() 接缝与 msg.c 的 [Item] 替换都真的走到了。\n\n★ 探针只读 RAM（gUnitArrayBlue 是 EWRAM 里的 struct Unit[62]，items[0..4] 在结构内偏移 0x1E，每项 u16）；★ 单位身份由 pCharacterData 指针反查 ROM 角色表确认：slot1 -> row0(number=1=CHARACTER_EIRIKA/虞聪)、slot0 -> row1(number=2=CHARACTER_SETH/赛思)；\n★ 输入节奏与 shanhe-boot 同源，1400 帧后改为**周期性点按** —— FE8 对白是边沿触发（KEY_NEW），按住不放只会推进一次，这一点在探索阶段实测踩过。\n\n★★★ 运行时语言（2026-09-28 补，这一条曾让验收网在**错误的前提下**全绿）：本构建 [locales] enabled = en,zh-Hans（**两行**），而**空白 SRAM** 首次启动时框架会弹出**阻塞式**首启语言选择器（框架自带场景 locale-blank-sram-selector-multi-modern-release 的期望值：active=1 / promptShown=1 / needsPreferenceRepair=1）。本场景原先的盲按键前缀会把高亮行（第 0 行 = 英文）直接按掉 ⇒ 整条场景实际跑在 **en** 下，sShanheItemNameBuffer 里是 \"Zhaoye\" 而不是「照夜」。\n   —— 为什么「测试跑 en、玩家看 zh-Hans」：玩家的真实存档里已记录 localeId=2，走 APPLY_ONLY 分支（实测带 --sram-image 载入 shanhe-cn-32m.sav 时 prefsState=VALID(5) / promptReason=NONE(0) / sCurrentLocale=0x02），所以实机看到的是中文；而无头采集不加载 .sav，永远从空白 SRAM 起步，于是两者分岔。\n\n   修法：把启动前缀里落在选择器上的那两拍改成 DOWN(650) + A(730)，**显式把语言选成简体中文**（两行时 DOWN×1 + A；框架 locale-cjk-first-start-zh-hans 是三行的 DOWN×2 + A，同一配方加一行）。这一步把「运行时语言」从**隐式副作用**变成**显式被断言的输入**：本场景第一个检查点 locale-zh-hans-committed(840) 断言 gExpansionLanguageMenuProbe+0x06/+0x07 = 2、sCurrentLocale = 0x02、sCurrentLocaleValid = 0x01，后面三个检查点也都带 sCurrentLocale 探针。任何一环退回英文，本场景立刻红。\n\n★ 时序注意：选择器关闭点从 ~355 帧推迟到 ~731 帧，**整条流程整体后移约 400 帧**，三个机制检查点的帧号已按 100 帧步长的状态扫描重新定位（照夜到手发生在 3400~3500 之间，被消耗发生在 4400~4500 之间）。改按键脚本后必须重跑状态扫描，不要凭旧帧号硬套。",
   "frames": [
     {
       "start": 90,
-      "end": 95,
+      "end": 96,
       "keys": [
         "A"
       ]
     },
     {
       "start": 155,
-      "end": 160,
+      "end": 161,
       "keys": [
         "START"
       ]
     },
     {
       "start": 220,
-      "end": 225,
+      "end": 226,
       "keys": [
         "A"
       ]
     },
     {
       "start": 285,
-      "end": 290,
+      "end": 291,
       "keys": [
         "START"
       ]
     },
     {
-      "start": 350,
-      "end": 355,
+      "start": 650,
+      "end": 656,
+      "keys": [
+        "DOWN"
+      ]
+    },
+    {
+      "start": 730,
+      "end": 736,
       "keys": [
         "A"
-      ]
-    },
-    {
-      "start": 415,
-      "end": 420,
-      "keys": [
-        "START"
-      ]
-    },
-    {
-      "start": 480,
-      "end": 485,
-      "keys": [
-        "A"
-      ]
-    },
-    {
-      "start": 545,
-      "end": 550,
-      "keys": [
-        "START"
       ]
     },
     {
@@ -664,44 +650,128 @@
   ],
   "checkpoints": [
     {
+      "name": "locale-zh-hans-committed",
+      "frame": 840,
+      "framebuffer": true,
+      "probes": [
+        {
+          "address": "gExpansionLanguageMenuProbe+0x00",
+          "size": 1,
+          "expected": "0x00"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x02",
+          "size": 1,
+          "expected": "0x01"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x06",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x07",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x08",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x12",
+          "size": 1,
+          "expected": "0x00"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "sCurrentLocaleValid",
+          "size": 1,
+          "expected": "0x01"
+        }
+      ]
+    },
+    {
       "name": "prologue-map-loaded",
       "frame": 3000,
       "framebuffer": true,
       "probes": [
         {
           "address": "gPlaySt+0x0e",
-          "size": 1
+          "size": 1,
+          "expected": "0x00"
         },
         {
           "address": "gPlaySt+0x1b",
-          "size": 1
+          "size": 1,
+          "expected": "0x01"
         },
         {
           "address": "gUnitArrayBlue+0x1e",
-          "size": 2
+          "size": 2,
+          "expected": "0x1e03"
         },
         {
           "address": "gUnitArrayBlue+0x68",
-          "size": 2
+          "size": 2,
+          "expected": "0x0000"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x00",
+          "size": 2,
+          "expected": "0x0000"
         }
       ]
     },
     {
       "name": "zhaoye-granted",
-      "frame": 4000,
+      "frame": 3700,
       "framebuffer": true,
       "probes": [
         {
           "address": "gPlaySt+0x0e",
-          "size": 1
+          "size": 1,
+          "expected": "0x00"
         },
         {
           "address": "gUnitArrayBlue+0x1e",
-          "size": 2
+          "size": 2,
+          "expected": "0x1e03"
         },
         {
           "address": "gUnitArrayBlue+0x68",
-          "size": 2
+          "size": 2,
+          "expected": "0x2dcf"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x00",
+          "size": 2,
+          "expected": "0x85e7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x02",
+          "size": 2,
+          "expected": "0xe5a7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x04",
+          "size": 2,
+          "expected": "0x9ca4"
         }
       ]
     },
@@ -712,11 +782,33 @@
       "probes": [
         {
           "address": "gPlaySt+0x0e",
-          "size": 1
+          "size": 1,
+          "expected": "0x00"
         },
         {
           "address": "gUnitArrayBlue+0x68",
-          "size": 2
+          "size": 2,
+          "expected": "0x2bcf"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x00",
+          "size": 2,
+          "expected": "0x85e7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x02",
+          "size": 2,
+          "expected": "0xe5a7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x04",
+          "size": 2,
+          "expected": "0x9ca4"
         }
       ]
     }

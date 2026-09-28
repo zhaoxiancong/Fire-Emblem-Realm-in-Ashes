@@ -891,6 +891,9 @@ fi
 #         （Makefile:562 → src/msg_data.c → src/msg_data.o）
 #   只做 (A) 会出现「审计全绿但 ROM 里仍是英文」。本步补 (B)。
 #   定位键 = FE8U target id（texts.txt 的 ## MSG_<HEX>）。
+#   ⚠️ 本通道只能【改已有段的正文】。2026-09-29 实测：想「新增消息」走不通 ——
+#      框架 game_catalog/build.py 要求 fe8u_target_map.json 行数与消息总数严格相等，
+#      加消息就要重跑整条本地化哈希链。扩展道具的名字因此改走 texts/expansion/。
 MSG_OVERRIDE_PATCHES="$(find "$CONTENT_DIR/texts" -type f -name 'msg_overrides.*.json' 2>/dev/null)"
 if [ -n "$MSG_OVERRIDE_PATCHES" ]; then
   MSG_OVR_N=0
@@ -1566,6 +1569,40 @@ PY
     fi
   else
     warn "⑤ 读不到 .locale_data 段（缺 ELF 或缺 arm-none-eabi-readelf）—— 跳过；建议用 mGBA 目视确认汉字"
+  fi
+
+  # ⑥ 扩展道具的显示名必须真实可达（2026-09-29 新增）
+  # ⚠️ 这条断言是为一个**已发生**的实机缺陷加的，不是预防性完备：
+  #    玩家原话："主角背包里面没有照夜，而且突刺剑名字还没了"。
+  #    根因：扩展槽道具（0xCE/0xCF）当时只有 authoringName —— 而那条通道
+  #    **只在 EXPANSION_STARTER_CONTENT=1 档**才生成可得名字表，本项目不开该开关；
+  #    实测 gItemData[0xCE/0xCF].nameTextId 都是 0x0000 ⇒ GetItemName() 的 vanilla
+  #    回落取到空消息 ⇒ 背包里一片空白（原突刺剑槽位现在装着照夜，两个都空白）。
+  #    当时的验收只核对**数值字段**（might/hit/uses/…），正好从 nameTextId
+  #    （u16 = 0）上读过去 —— 数值全对，玩家什么都看不到。
+  #
+  #    这条断言把「玩家看到的那几个字」全链路钉死（详见工具头注释的 A–E）：
+  #      A 内容声明(items_expansion.json) → B seam 映射(src/shanhe_item_names.c)
+  #      → C 扩展文本目录(texts/expansion/*) → D ROM 字节(gItemData + 名字 utf8)
+  #      → E 调用点(bmitem.c 两处 + msg.c 一处)
+  #    其中 D3「gItemData 全表 .number == 下标」同时**证明** stride/字段偏移可信，
+  #    避免用错的偏移去读 nameTextId 而自证清白。D6 要求名字的 UTF-8 字节真的
+  #    出现在 ROM 里（CJK 语言下还要求名字含非 ASCII 字符，防止用英文占位符蒙混）。
+  #
+  #    负向测试（2026-09-29）：喂「只有 authoringName、没有 seam 表」→ 精确报
+  #    B0/B3；喂「注册表缺 key」→ 报 C3；喂旧 ROM（名字未链接）→ 报 D6。均 rc=2。
+  if [ -f "$REPO_ROOT/tools/shanhe-namecheck.py" ]; then
+    if python3 "$REPO_ROOT/tools/shanhe-namecheck.py" \
+         --content "$CONTENT_DIR" --framework "$FRAMEWORK_DIR" --rom "$FRAMEWORK_ROM" \
+         >> "$REPORT" 2>&1; then
+      ok "⑥ 扩展道具显示名已断言（内容 → seam 表 → 扩展文本目录 → ROM 字节，含 gItemData 布局自证）"
+    else
+      bad "⑥ 扩展道具显示名断言失败"
+      grep -E '✗|断言 ' "$REPORT" | tail -8 | sed 's/^/      /'
+      die "⑥ 扩展道具必须有真实可达的显示名（见 tools/shanhe-namecheck.py 头注释）"
+    fi
+  else
+    warn "⑥ 缺 tools/shanhe-namecheck.py —— 跳过（不建议：这类缺陷数值检查抓不到）"
   fi
 
   ROM_SHA1="$(sha1sum "$FRAMEWORK_ROM" | cut -c1-8)"

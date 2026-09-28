@@ -1,0 +1,63 @@
+# 山河烬 框架补丁: shanhe-item-name-seam-msg
+#
+# 目标文件: src/msg.c
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 对话 / 弹窗里的 `[Item]`（控制码 0x22）文本替换，对扩展槽道具也要取到
+#   真实显示名。与 shanhe-item-name-seam.patch 是同一个缺陷的**第三个调用点**；
+#   单独成文件仅因「1 个补丁 = 1 个目标文件」的约定（目标文件不同）。
+#
+# 为什么必须单独挂（不改就会漏）:
+#   CJK 档的 0x22 分支**不走** GetItemName()，而是直接
+#   `GetStringFromIndexInBufferWithLimit(GetItemData(...)->nameTextId, ...)`
+#   —— 扩展槽道具的 nameTextId 是 0 ⇒ 展开为空 ⇒ 对话里内嵌的道具名空白。
+#   （非 CJK 分支本来就 `CopyString(dst, GetItemName(...))`，故无需改动。）
+#
+# 这是"穷举 ItemData.nameTextId 全部生产读点"后的结果：处理完 GetItemName()
+# 与这里这两处之后，不存在第三条绕过通道（其余命中都在角色 / 职业 / 世界地名的
+# 同名结构体字段上，与本议题无关）。
+#
+# 编译门: `defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST`；
+#   被改的分支本就在 `#if FE8_LOCALIZED_GAME_TEXT_CJK_PROFILE_ENABLED` 之内。
+#
+# 详见 docs/5 §5.14。上游若给扩展道具提供既成的本地化名字通道，本补丁可删除。
+#
+
+diff --git a/src/msg.c b/src/msg.c
+index 732601c..e852aeb 100644
+--- a/src/msg.c
++++ b/src/msg.c
+@@ -11,6 +11,17 @@
+ #include "scene.h"
+ #include "text_utf8.h"
+ 
++/* Shanhe: display names of the project's expansion-slot items; defined in
++ * src/shanhe_item_names.c (project content source). The [Item] control
++ * code (0x22) transform below is the one production consumer of
++ * ItemData.nameTextId that does not go through GetItemName(), and an
++ * expansion-slot item's nameTextId is 0 by framework policy -- without
++ * this hook, dialogue that embeds such an item's name renders blank. */
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++#include "id_space.h"
++char* ShanheItemName(ItemId item);
++#endif
++
+ #if FE8_LOCALIZED_GAME_TEXT_CJK_PROFILE_ENABLED
+ #undef GetStringFromIndexInBuffer
+ #define MSG_BUFFER1 (sMsgString.storage.legacy.buffer1)
+@@ -1034,6 +1045,15 @@ char * StringInsertSpecialPrefixByCtrl(void)
+ #if FE8_EXPANSION_STARTER_CONTENT
+                 replacement = ExpansionStarterContentItemName(
+                     (ItemId)GetItemIndex(gActionData.item));
++#endif
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++                /* Shanhe: expansion-slot items, whose nameTextId is 0 --
++                 * the fallback below would expand to nothing. A NULL
++                 * replacementCapacity means "NUL-terminated", which is
++                 * exactly how the starter-content seam above is consumed. */
++                if (replacement == NULL)
++                    replacement = ShanheItemName(
++                        (ItemId)GetItemIndex(gActionData.item));
+ #endif
+                 if (replacement == NULL)
+                 {

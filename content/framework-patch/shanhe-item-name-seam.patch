@@ -1,0 +1,98 @@
+# 山河烬 框架补丁: shanhe-item-name-seam
+#
+# 目标文件: src/bmitem.c
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 让扩展槽道具（0xCE 破军 / 0xCF 照夜）在**生产取名路径**上有真实可达的
+#   显示名。这是 2026-09-29 玩家实测缺陷的修复 ——
+#   「主角背包里面没有照夜，而且突刺剑名字还没了」。
+#
+# 缺陷根因（不是"忘了写名字"，是通道选错了）:
+#   框架既定策略：扩展道具**不绑**共享消息表，ItemData.nameTextId 一律 0；
+#   框架为此给的通道是 authoringName，但它**只在 EXPANSION_STARTER_CONTENT=1 档**
+#   才生成可得名字表。本项目不开该开关 ⇒ GetItemName() 的 vanilla 回落
+#   `GetStringFromIndex(0)` 取到空消息 ⇒ 界面上**一片空白**。
+#   而当时的验收网只断言数值字段（.number / .maxUses …），正好从 nameTextId
+#   （u16 = 0）上读过去 ⇒ 缺名字这件事顺利通过验收。
+#
+# 改法（三处调用点里的前两处；第三处在 shanhe-item-name-seam-msg.patch）:
+#   ① 文件顶部：声明 `char* ShanheItemName(ItemId)`。定义在
+#      src/shanhe_item_names.c —— 由构建第 3c 步从 content/src/ 铺设的**内容层**
+#      源文件（名字正文不在补丁里，见下）。
+#   ② GetItemName()：扩展槽道具直接返回目录里的名字；NULL 表示"不是本项目道具"，
+#      原样回落 vanilla 路径 ⇒ 其余道具的代码路径与字节完全不变。
+#   ③ ItemNameUsesEnglishGrammar()：对本项目道具返回 FALSE，避免 CJK 档下被
+#      InsertPrefix() 加上英文冠词；同时不再依赖"上一次本地化查询的状态"这种
+#      隐式输入（目录通道不会更新那个状态）。
+#
+# 名字正文来源: 框架的扩展文本目录（texts/expansion/），由同批三个补丁提供 ——
+#   shanhe-expansion-registry.patch / -catalog-en.patch / -catalog-zh-hans.patch。
+#
+# 编译门: `defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST`
+#   —— src/bmitem.c 同时被归档（agbcc）车道编译，而 expansion_msg_ids.h 只存在于
+#   现代车道的生成目录；默认 cap（0xCD）下整块不编译，原版构建逐字节不变。
+#
+# 上游若自行给扩展道具提供本地化名字通道，本补丁可删除。详见 docs/5 §5.14、docs/6 §3.4g。
+#
+
+diff --git a/src/bmitem.c b/src/bmitem.c
+index 30ed12a..2c5c5cb 100644
+--- a/src/bmitem.c
++++ b/src/bmitem.c
+@@ -37,6 +37,20 @@ ID_SPACE_STATIC_ASSERT(ITEM_ID_CONFIGURED_CAP <= ITEM_ID_TECHNICAL_MAX,
+ ID_SPACE_STATIC_ASSERT(sizeof(ItemId) == 1, bmitem_item_id_storage_is_u8);
+ ID_SPACE_STATIC_ASSERT(ITEM_ID_TECHNICAL_MAX <= 0xFF, bmitem_item_id_max_fits_u8);
+ 
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++/* Shanhe: the display names of expansion-slot items (item id >=
++ * ITEM_ID_EXPANSION_FIRST) live in the expansion text catalog, not in the
++ * shared, Huffman-compressed message table -- see src/shanhe_item_names.c
++ * (a project content source, paved in by tools/shanhe-build.sh step 3c) for
++ * the full rationale and for the two text channels that were rejected.
++ *
++ * Declared here because this translation unit has two consumers below:
++ * GetItemName() and ItemNameUsesEnglishGrammar(). Returns NULL for every
++ * item that is not one of the project's own, so every other item path is
++ * untouched. */
++char* ShanheItemName(ItemId item);
++#endif
++
+ // TODO: figure out those two inline functions and where they belong
+ 
+ static inline void SetChapterUnk1C(int arg, u8 val) {
+@@ -66,6 +80,17 @@ static int ItemNameUsesEnglishGrammar(int item)
+         return TRUE;
+ #endif
+ 
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++    /* Shanhe expansion-catalog names are Chinese originals, never English
++     * fallback content: without this, GetItemNameWithArticle() would run
++     * InsertPrefix() over them and prepend an English article, which under
++     * the CJK profile reads as garbage in front of the Chinese name.
++     * This also keeps the decision independent of the *last* localized
++     * lookup's status, which a catalog-seam name never updates. */
++    if (ShanheItemName((ItemId)ITEM_INDEX(item)) != NULL)
++        return FALSE;
++#endif
++
+     status = LocalizedGameText_GetLastStatus();
+     return status == LOCALIZED_GAME_TEXT_STATUS_ENGLISH_FALLBACK_ABSENT
+         || status
+@@ -151,6 +176,17 @@ inline int GetItemIndex(int item) {
+ inline char* GetItemName(int item) {
+     char* result;
+ 
++#if defined(MODERN) && ITEM_ID_CONFIGURED_CAP >= ITEM_ID_EXPANSION_FIRST
++    /* Shanhe: expansion-slot items bind no shared message (framework
++     * policy keeps their nameTextId at 0), so the vanilla fallback below
++     * would decode message 0 -- a blank name on screen. Their name comes
++     * from the expansion text catalog instead. NULL = not one of ours. */
++    result = ShanheItemName((ItemId)ITEM_INDEX(item));
++
++    if (result != NULL)
++        return result;
++#endif
++
+ #if FE8_EXPANSION_STARTER_CONTENT
+     /* A framework-authored content record carries its ORIGINAL name as
+      * literal text (src/data/items_expansion.json -> the build-local

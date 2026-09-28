@@ -49,6 +49,13 @@ desktop.ini
 *.bak
 ~$*
 
+# ============ Python 字节码缓存 ============
+# tools/ 下的 .py 被 py_compile / 测试跑过就会生成 __pycache__/
+# （早先靠"每次手动 rm -rf tools/__pycache__"清，属于该加策略而非手动删的一类）
+__pycache__/
+*.pyc
+*.pyo
+
 # ============ WorkBuddy 工作目录 ============
 # .workbuddy/ 是本地工作状态（项目记忆 + 临时脚本），跨会话由工具维护，
 # 不入版本库（含本地绝对路径等机器相关信息）。

@@ -1,60 +1,288 @@
 {
   "schema_version": 1,
   "name": "shanhe-boot",
-  "description": "《山河烬》ROM 启动回归网（验证阶梯 L0 的第一级）。从冷启动走完 标题 -> New Game -> 难度 -> 空存档槽 三段普通 UI 输入，落三个检查点：(1) mode-select-shown —— 锁定**中文模式选择画面**的三行区域像素（新手/普通/困难），任何字库、字宽或本地化改动都会让它变色；(2) slot-list-shown —— 锁定三个存档槽为空时的整屏与 SRAM；(3) new-game-created —— 真实存档写入发生（SRAM 哈希必须与前一点不同），且 gPlaySt+0x0e（chapterIndex）与 +0x0f（faction）读回序章 0x00 / 我方 0x00，证明新建存档确实从序章开始。探针一律用**符号表达式**（gPlaySt+0x0e），链接地址变化不影响语义；不使用任何存档文件、savestate 或生成二进制。【2026-09-29 勘误】早期版本把这两条探针写成 gPlaySt+0x12/+0x13 并标注为 chapterIndex/faction —— 那是照抄上游 new-game.json 的描述，**字段归属是错的**：按 include/types.h 的 struct PlaySt 布局，+0x12/+0x13 是地图光标 xCursor/yCursor，chapterIndex 在 +0x0e、faction 在 +0x0f（上游那个场景因为两者恰好都读到 0x00 而没暴露）。现已改为真实偏移。注意：本场景只证明『启动链路与中文渲染没退化』，不证明原创机制 —— 机制断言见 shanhe-prologue.json（Rung-2）。",
+  "description": "《山河烬》ROM 启动回归网（验证阶梯 L0 的第一级）。从冷启动走到「新建存档」，落四个检查点，其中**语言选择被显式断言**。\n\n★★ 为什么必须显式选语言（2026-09-28 重做，D-8）：本构建 [locales] enabled = en,zh-Hans（两行），**空白 SRAM** 首次启动时框架会弹出**阻塞式**首启语言选择器（框架自带场景 locale-blank-sram-selector-multi-modern-release 的期望值：active=1 / promptShown=1 / needsPreferenceRepair=1 —— 已用本项目 ROM 逐字节复现）。本场景原先的盲按键前缀会把高亮行（第 0 行 = 英文）直接按掉，于是**整条启动链路跑在 en 下**。而框架的**菜单文本是随运行时语言切换的**（旁白/事件文本才是构建期烘焙的）—— 用跨帧像素重建（见 §5.14.3 的取帧工具）目视核对旧指纹的 mode-select 检查点，拍到的是 **\"New Game / Tutorial / Normal / Difficult\" + 英文说明**，而描述里写的却是「中文模式选择画面（新手/普通/困难）」。**文档再一次跑在证据前面。**\n\n修法：启动前缀落在选择器上的那两拍改成 DOWN(650) + A(730)（两行时 DOWN×1 + A 选简体中文；框架 locale-cjk-first-start-zh-hans 是三行的 DOWN×2 + A，同一配方加一行），其后按同一节奏推进。四个检查点：\n\n① language-zh-hans-committed(740) —— 选择器刚关闭，断言语言真的落到简体中文：gExpansionLanguageMenuProbe+0x06/+0x07 = 0x02、sCurrentLocale = 0x02、sCurrentLocaleValid = 0x01、+0x08（enabledLocaleCount）= 0x02、+0x12（needsPreferenceRepair）= 0x00（已被修复写入清掉）。\n② mode-select-shown(1400) —— 「模式选择」画面（中文「模式选择 / 新手 …」）。⚠️ 该窗口是**入场动画**，三行区块哈希对帧号敏感；本检查点的**主要保护由整屏 framebuffer 哈希承担**，区块只作辅助定位。\n③ save-slot-list-shown(1500) —— 三个存档槽全空（画面为「开始新的游戏」标题 + 三个 `-NO DATA-` + `PLAYTIME 0:00.00`），已用取帧工具**目视确认是静止画面**，因此整屏 + 三个槽区块哈希都稳定；同时记录 SRAM 哈希。\n④ new-game-created(2000) —— 真实存档写入并进入序章：SRAM 哈希**必须与 ③ 不同**（4d1e6793… → e28decc6…，这条原先只是描述里的一句宣称、指纹里其实两个检查点哈希相同 —— 现已改成事实），且 gPlaySt+0x0e（chapterIndex）= 0x00、+0x0f（faction）= 0x00，证明新建存档确实从序章、我方阶段开始。\n\n★ 探针一律用**符号表达式**（gPlaySt+0x0e），链接地址变化不影响语义；不使用存档文件、savestate 或生成二进制。\n★ 修掉一处字段归属错误：早期版本把两条探针写成 gPlaySt+0x12/+0x13 并标注为 chapterIndex/faction —— 那是照抄上游 new-game.json 的描述，**字段归属是错的**；按 include/types.h 的 struct PlaySt，+0x12/+0x13 是地图光标 xCursor/yCursor，chapterIndex 在 **+0x0E**、faction 在 **+0x0F**（0x00 我方 / 0x40 NPC / 0x80 敌方）。现已改为真实偏移。\n★ 注意：本场景只证明「启动链路与中文渲染没退化」，不证明原创机制 —— 机制断言见 shanhe-prologue。",
   "frames": [
-    { "start": 90,   "end": 95,   "keys": ["A"] },
-    { "start": 155,  "end": 160,  "keys": ["START"] },
-    { "start": 220,  "end": 225,  "keys": ["A"] },
-    { "start": 285,  "end": 290,  "keys": ["START"] },
-    { "start": 350,  "end": 355,  "keys": ["A"] },
-    { "start": 415,  "end": 420,  "keys": ["START"] },
-    { "start": 480,  "end": 485,  "keys": ["A"] },
-    { "start": 545,  "end": 550,  "keys": ["START"] },
-    { "start": 950,  "end": 956,  "keys": ["A"] },
-    { "start": 1050, "end": 1056, "keys": ["A"] },
-    { "start": 1150, "end": 1156, "keys": ["A"] }
-  ],
-  "checkpoints": [
     {
-      "name": "mode-select-shown",
-      "frame": 1000,
-      "framebuffer": true,
-      "probes": [],
-      "regions": [
-        { "name": "hard-row",   "x": 28, "y": 112, "width": 104, "height": 20 },
-        { "name": "easy-row",   "x": 28, "y": 52,  "width": 104, "height": 20 },
-        { "name": "normal-row", "x": 28, "y": 82,  "width": 104, "height": 20 }
+      "start": 90,
+      "end": 95,
+      "keys": [
+        "A"
       ]
     },
     {
-      "name": "slot-list-shown",
-      "frame": 1140,
+      "start": 155,
+      "end": 160,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 220,
+      "end": 225,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 285,
+      "end": 290,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 650,
+      "end": 656,
+      "keys": [
+        "DOWN"
+      ]
+    },
+    {
+      "start": 730,
+      "end": 736,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 791,
+      "end": 796,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 856,
+      "end": 861,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 921,
+      "end": 926,
+      "keys": [
+        "START"
+      ]
+    },
+    {
+      "start": 1326,
+      "end": 1331,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1426,
+      "end": 1431,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1526,
+      "end": 1531,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1600,
+      "end": 1605,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1680,
+      "end": 1685,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1760,
+      "end": 1765,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1840,
+      "end": 1845,
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "start": 1920,
+      "end": 1925,
+      "keys": [
+        "A"
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "name": "language-zh-hans-committed",
+      "frame": 740,
+      "framebuffer": false,
+      "probes": [
+        {
+          "address": "gExpansionLanguageMenuProbe+0x00",
+          "size": 1,
+          "expected": "0x00"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x02",
+          "size": 1,
+          "expected": "0x01"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x06",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x07",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x08",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x12",
+          "size": 1,
+          "expected": "0x00"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        },
+        {
+          "address": "sCurrentLocaleValid",
+          "size": 1,
+          "expected": "0x01"
+        }
+      ]
+    },
+    {
+      "name": "mode-select-shown",
+      "frame": 1400,
       "framebuffer": true,
-      "probes": [],
+      "probes": [
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        }
+      ],
       "regions": [
-        { "name": "slot-0", "x": 31, "y": 48,  "width": 184, "height": 20 },
-        { "name": "slot-1", "x": 31, "y": 78,  "width": 184, "height": 20 },
-        { "name": "slot-2", "x": 31, "y": 108, "width": 184, "height": 20 }
+        {
+          "name": "mode-row-1",
+          "x": 28,
+          "y": 52,
+          "width": 104,
+          "height": 20
+        },
+        {
+          "name": "mode-row-2",
+          "x": 28,
+          "y": 82,
+          "width": 104,
+          "height": 20
+        },
+        {
+          "name": "mode-row-3",
+          "x": 28,
+          "y": 112,
+          "width": 104,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "name": "save-slot-list-shown",
+      "frame": 1500,
+      "framebuffer": true,
+      "probes": [
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        }
+      ],
+      "regions": [
+        {
+          "name": "slot-0",
+          "x": 31,
+          "y": 48,
+          "width": 184,
+          "height": 20
+        },
+        {
+          "name": "slot-1",
+          "x": 31,
+          "y": 78,
+          "width": 184,
+          "height": 20
+        },
+        {
+          "name": "slot-2",
+          "x": 31,
+          "y": 108,
+          "width": 184,
+          "height": 20
+        }
       ],
       "sram_hash": true,
       "sram_hash_exclude_ranges": [
-        { "offset": 29640, "length": 9 },
-        { "offset": 29650, "length": 2 }
+        {
+          "offset": 29640,
+          "length": 9
+        },
+        {
+          "offset": 29650,
+          "length": 2
+        }
       ]
     },
     {
       "name": "new-game-created",
-      "frame": 1400,
+      "frame": 2000,
       "framebuffer": true,
       "probes": [
-        { "address": "gPlaySt+0x0e", "size": 1 },
-        { "address": "gPlaySt+0x0f", "size": 1 }
+        {
+          "address": "gPlaySt+0x0e",
+          "size": 1,
+          "expected": "0x00"
+        },
+        {
+          "address": "gPlaySt+0x0f",
+          "size": 1,
+          "expected": "0x00"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "expected": "0x02"
+        }
       ],
       "sram_hash": true,
       "sram_hash_exclude_ranges": [
-        { "offset": 29640, "length": 9 },
-        { "offset": 29650, "length": 2 }
+        {
+          "offset": 29640,
+          "length": 9
+        },
+        {
+          "offset": 29650,
+          "length": 2
+        }
       ]
     }
   ]

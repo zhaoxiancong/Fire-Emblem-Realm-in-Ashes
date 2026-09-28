@@ -1,8 +1,55 @@
 {
   "checkpoints": [
     {
+      "frame": 840,
+      "framebuffer_hash": "fnv1a64-rgb24:c412d0bed07d9a13",
+      "name": "locale-zh-hans-committed",
+      "probes": [
+        {
+          "address": "gExpansionLanguageMenuProbe+0x00",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x02",
+          "size": 1,
+          "value": "0x01"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x06",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x07",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x08",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x12",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "sCurrentLocaleValid",
+          "size": 1,
+          "value": "0x01"
+        }
+      ]
+    },
+    {
       "frame": 3000,
-      "framebuffer_hash": "fnv1a64-rgb24:c57232df478b3af4",
+      "framebuffer_hash": "fnv1a64-rgb24:58d01fe7562c1913",
       "name": "prologue-map-loaded",
       "probes": [
         {
@@ -24,12 +71,22 @@
           "address": "gUnitArrayBlue+0x68",
           "size": 2,
           "value": "0x0000"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x00",
+          "size": 2,
+          "value": "0x0000"
         }
       ]
     },
     {
-      "frame": 4000,
-      "framebuffer_hash": "fnv1a64-rgb24:93ca9270f0d02665",
+      "frame": 3700,
+      "framebuffer_hash": "fnv1a64-rgb24:bd9fe55af4f566ca",
       "name": "zhaoye-granted",
       "probes": [
         {
@@ -46,12 +103,32 @@
           "address": "gUnitArrayBlue+0x68",
           "size": 2,
           "value": "0x2dcf"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x00",
+          "size": 2,
+          "value": "0x85e7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x02",
+          "size": 2,
+          "value": "0xe5a7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x04",
+          "size": 2,
+          "value": "0x9ca4"
         }
       ]
     },
     {
       "frame": 4700,
-      "framebuffer_hash": "fnv1a64-rgb24:f85174681cca0d9a",
+      "framebuffer_hash": "fnv1a64-rgb24:78c63f8e7ba3041c",
       "name": "zhaoye-used-in-tutorial",
       "probes": [
         {
@@ -63,6 +140,26 @@
           "address": "gUnitArrayBlue+0x68",
           "size": 2,
           "value": "0x2bcf"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x00",
+          "size": 2,
+          "value": "0x85e7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x02",
+          "size": 2,
+          "value": "0xe5a7"
+        },
+        {
+          "address": "sShanheItemNameBuffer+0x04",
+          "size": 2,
+          "value": "0x9ca4"
         }
       ]
     }
@@ -70,7 +167,7 @@
   "format_version": 2,
   "rom": {
     "game_code": "BE8E",
-    "sha1": "dda6355f7d052e6642dd5277c916679a32e997f5",
+    "sha1": "10d493d41175f0ead34823589d7e698215a653e5",
     "size": 33554432,
     "title": "FIREEMBLEM2E"
   },

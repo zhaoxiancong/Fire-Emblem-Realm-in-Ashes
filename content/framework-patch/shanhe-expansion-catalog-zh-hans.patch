@@ -1,0 +1,38 @@
+# 山河烬 框架补丁: shanhe-expansion-catalog-zh-hans
+#
+# 目标文件: texts/expansion/catalog.zh-Hans.json
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 给两个 key 补上**中文**正文 —— 照夜 / 破军。
+#   这就是玩家在背包 / 状态页 / 商店里真正看到的那两个字，是 2026-09-29
+#   缺陷（「主角背包里面没有照夜，而且突刺剑名字还没了」）的修复落点。
+#
+# 为什么之前是空白（一句话）: 扩展槽道具的 ItemData.nameTextId 按框架策略恒为 0，
+#   而名字此前只写在仅有"内容档"才消费的 authoringName 里 ⇒ GetItemName() 的
+#   vanilla 回落取到消息 0 ⇒ 界面上没有字。详见 docs/5 §5.13 的复盘。
+#
+# 边界校验: registry 里两条的 max_width = 24、max_decoded_bytes = 24；
+#   实际 "照夜"/"破军" = 显示宽 4 / utf8 7 字节（含结尾 NUL），远在上界内。
+#   宽度口径与框架一致（东亚 W/F 记 2）—— 构建期由 scripts/localization/catalog.py
+#   校验，跑完再被 tools/shanhe-namecheck.py 的 C4/C7 独立复核。
+#
+# 一个 key 一条，追加在 strings 对象末尾；不删不改任何既有条目。
+#
+# 详见 docs/5 §5.14。
+#
+
+diff --git a/texts/expansion/catalog.zh-Hans.json b/texts/expansion/catalog.zh-Hans.json
+index 81616cb..396c835 100644
+--- a/texts/expansion/catalog.zh-Hans.json
++++ b/texts/expansion/catalog.zh-Hans.json
+@@ -155,6 +155,9 @@
+     "debug.confirm.green_blocked": "应用绿军阻止",
+     "debug.status.turn": "回合",
+     "debug.mode.computer": "电脑",
+-    "debug.mode.blocked": "阻止"
++    "debug.mode.blocked": "阻止",
++
++    "shanhe.item.pojun.name": "破军",
++    "shanhe.item.zhaoye.name": "照夜"
+   }
+ }

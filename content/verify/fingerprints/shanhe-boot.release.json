@@ -1,45 +1,103 @@
 {
   "checkpoints": [
     {
-      "frame": 1000,
-      "framebuffer_hash": "fnv1a64-rgb24:24e8aa93b2bde765",
+      "frame": 740,
+      "name": "language-zh-hans-committed",
+      "probes": [
+        {
+          "address": "gExpansionLanguageMenuProbe+0x00",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x02",
+          "size": 1,
+          "value": "0x01"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x06",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x07",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x08",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "gExpansionLanguageMenuProbe+0x12",
+          "size": 1,
+          "value": "0x00"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
+        },
+        {
+          "address": "sCurrentLocaleValid",
+          "size": 1,
+          "value": "0x01"
+        }
+      ]
+    },
+    {
+      "frame": 1400,
+      "framebuffer_hash": "fnv1a64-rgb24:2ba17d715c367f4b",
       "name": "mode-select-shown",
-      "probes": [],
+      "probes": [
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
+        }
+      ],
       "regions": [
         {
-          "hash": "fnv1a64-region:1933f11417f8c46b",
+          "hash": "fnv1a64-region:cf7e8d05570ab426",
           "height": 20,
-          "name": "easy-row",
+          "name": "mode-row-1",
           "width": 104,
           "x": 28,
           "y": 52
         },
         {
-          "hash": "fnv1a64-region:0c31b198d3aaed19",
+          "hash": "fnv1a64-region:a3ca3a761dcbe50c",
           "height": 20,
-          "name": "hard-row",
-          "width": 104,
-          "x": 28,
-          "y": 112
-        },
-        {
-          "hash": "fnv1a64-region:ebc8bdcbb5557f6a",
-          "height": 20,
-          "name": "normal-row",
+          "name": "mode-row-2",
           "width": 104,
           "x": 28,
           "y": 82
+        },
+        {
+          "hash": "fnv1a64-region:d2ca4b04ace068fc",
+          "height": 20,
+          "name": "mode-row-3",
+          "width": 104,
+          "x": 28,
+          "y": 112
         }
       ]
     },
     {
-      "frame": 1140,
-      "framebuffer_hash": "fnv1a64-rgb24:fd1bf7da46d3f720",
-      "name": "slot-list-shown",
-      "probes": [],
+      "frame": 1500,
+      "framebuffer_hash": "fnv1a64-rgb24:97bcb0bbbe569d26",
+      "name": "save-slot-list-shown",
+      "probes": [
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
+        }
+      ],
       "regions": [
         {
-          "hash": "fnv1a64-region:57cccd178142fdfd",
+          "hash": "fnv1a64-region:c8000462cf4ad13a",
           "height": 20,
           "name": "slot-0",
           "width": 184,
@@ -47,7 +105,7 @@
           "y": 48
         },
         {
-          "hash": "fnv1a64-region:587bf08a24d2a660",
+          "hash": "fnv1a64-region:f2df1887d30bba94",
           "height": 20,
           "name": "slot-1",
           "width": 184,
@@ -55,7 +113,7 @@
           "y": 78
         },
         {
-          "hash": "fnv1a64-region:78bff184dbe380ff",
+          "hash": "fnv1a64-region:e41dd2632ce7a423",
           "height": 20,
           "name": "slot-2",
           "width": 184,
@@ -63,11 +121,11 @@
           "y": 108
         }
       ],
-      "sram_hash": "fnv1a64-sram-normalized:c39ca0f5e40ed115"
+      "sram_hash": "fnv1a64-sram-normalized:df9c35014d1e6793"
     },
     {
-      "frame": 1400,
-      "framebuffer_hash": "fnv1a64-rgb24:4d6e73e308b75b68",
+      "frame": 2000,
+      "framebuffer_hash": "fnv1a64-rgb24:875c2a46c610d43b",
       "name": "new-game-created",
       "probes": [
         {
@@ -79,15 +137,20 @@
           "address": "gPlaySt+0x0f",
           "size": 1,
           "value": "0x00"
+        },
+        {
+          "address": "sCurrentLocale",
+          "size": 1,
+          "value": "0x02"
         }
       ],
-      "sram_hash": "fnv1a64-sram-normalized:c39ca0f5e40ed115"
+      "sram_hash": "fnv1a64-sram-normalized:4de5da7ae28decc6"
     }
   ],
   "format_version": 2,
   "rom": {
     "game_code": "BE8E",
-    "sha1": "dda6355f7d052e6642dd5277c916679a32e997f5",
+    "sha1": "10d493d41175f0ead34823589d7e698215a653e5",
     "size": 33554432,
     "title": "FIREEMBLEM2E"
   },

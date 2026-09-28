@@ -1,0 +1,58 @@
+# 山河烬 框架补丁: shanhe-expansion-registry
+#
+# 目标文件: texts/expansion/registry.json
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么: 在框架的「扩展文本目录」里注册两个新 key，承载本项目两件原创神器的
+#   显示名正文（id 146 = 照夜 / 147 = 破军）。
+#
+# 为什么走这条通道（而不是 texts.txt / 游戏文本目录 / nameTextId）:
+#   见 shanhe-item-name-seam.patch 的说明与 docs/5 §5.14。要点：
+#   · 给 texts/texts.txt 追加消息会让 fe8u_target_map.json 的行数与消息总数
+#     不再相等，构建在 modern.mk:2399 处硬失败（2026-09-29 实测）；
+#   · 游戏文本目录按 FE8U target id 寻址，表达不了"全新消息"；
+#   · nameTextId 的 id 空间与 FE8U 消息（0x1..0xD55）重叠，语义会污染。
+#
+# id 为什么是 146/147: 本文件在上游该 commit 里 0..145 连续占用；本补丁**追加**
+#   两条并保持严格升序（registry 的 append-only 契约 —— 已退休的槽位不得复用）。
+#   ⚠️ 上游若在同一区间新增条目，本补丁需要重新编号：构建会因 id 重复/不升序
+#   报错（tools/shanhe-namecheck.py 的 C1 也会独立复核），不会静默串味。
+#
+# 配套（缺一不生效）:
+#   · shanhe-expansion-catalog-en.patch / -zh-hans.patch —— 两个 key 的正文；
+#   · shanhe-item-name-seam.patch（src/bmitem.c）与 shanhe-item-name-seam-msg.patch
+#     （src/msg.c）—— 真正去读这两个 id 的生产代码；
+#   · content/src/shanhe_item_names.c（内容层，"哪个道具用哪个 key"的映射表）。
+#
+# 详见 docs/5 §5.14、docs/6 §3.4g。
+#
+
+diff --git a/texts/expansion/registry.json b/texts/expansion/registry.json
+index 8b97862..e0029dc 100644
+--- a/texts/expansion/registry.json
++++ b/texts/expansion/registry.json
+@@ -1232,6 +1232,24 @@
+       "max_decoded_bytes": 96,
+       "pseudo_policy": "compact",
+       "notes": "Issue #168 localized map-menu help for issue #6 danger overlay."
++    },
++    {
++      "id": 146,
++      "key": "shanhe.item.zhaoye.name",
++      "status": "active",
++      "surface": "framework_generic",
++      "max_width": 24,
++      "max_decoded_bytes": 24,
++      "notes": "Shanhe original divine relic 'Zhaoye' item display name (item 0xCF). Rendered by the GetItemName() seam in src/bmitem.c."
++    },
++    {
++      "id": 147,
++      "key": "shanhe.item.pojun.name",
++      "status": "active",
++      "surface": "framework_generic",
++      "max_width": 24,
++      "max_decoded_bytes": 24,
++      "notes": "Shanhe original divine relic 'Pojun' item display name (item 0xCE). Rendered by the GetItemName() seam in src/bmitem.c."
+     }
+   ]
+ }
