@@ -163,6 +163,10 @@ CODE_EXPECT="$(lock_get build rom_header_game_code)"
 # 再统一拼成 make 变量；不在构建命令里硬编码。
 FEAT_ITEM_CAP="$(lock_get features item_id_cap)"
 FEAT_MECH_HOOKS="$(lock_get features mechanics_hooks)"
+# 自定义法术特效（框架 issue #77/#78）—— M3④ 惊雷引「雷光链」。1 = 启用。
+# ⚠️ 会改变现代构建的**配置指纹**，并把 assets 的 profile 目录由 …-custom0-… 变为
+#    …-custom1-…（首次切换触发生成全部资产 + 一次全量重编，正常）。
+FEAT_SPELL="$(lock_get features custom_spell_effects)"
 
 # ── [locales] + [build].rom_size_label：本地化 + ROM 尺寸（同一单一事实来源） ──
 # ⚠️ 2026-09-27 换机实测教训（真凶，非 config.autotools.mk）：
@@ -183,6 +187,7 @@ ROM_SIZE_LABEL="$(lock_get build rom_size_label)"
 MAKE_VARS=""
 [ -n "$FEAT_ITEM_CAP" ] && MAKE_VARS="$MAKE_VARS FE8_ITEM_ID_CAP=$FEAT_ITEM_CAP"
 [ -n "$FEAT_MECH_HOOKS" ] && MAKE_VARS="$MAKE_VARS EXPANSION_MECHANICS_HOOKS=$FEAT_MECH_HOOKS"
+[ -n "$FEAT_SPELL" ] && MAKE_VARS="$MAKE_VARS EXPANSION_CUSTOM_SPELL_EFFECTS=$FEAT_SPELL"
 [ -n "$ROM_SIZE_LABEL" ] && MAKE_VARS="$MAKE_VARS MODERN_ROM_SIZE=$ROM_SIZE_LABEL"
 [ -n "$LOCALES_ENABLED" ] && MAKE_VARS="$MAKE_VARS EXPANSION_ENABLED_LOCALES=$LOCALES_ENABLED"
 [ -n "$LOCALE_DEFAULT" ] && MAKE_VARS="$MAKE_VARS EXPANSION_DEFAULT_LOCALE=$LOCALE_DEFAULT"
@@ -198,6 +203,12 @@ if [ -n "$FEAT_ITEM_CAP" ]; then
 fi
 if [ -n "$FEAT_MECH_HOOKS" ]; then
   export EXPANSION_MECHANICS_HOOKS="$FEAT_MECH_HOOKS"
+fi
+# 法术特效开关同样 export：scripts/assets 的 CLI 从环境变量读同一值
+# （assets.mk 的 ASSET_PROFILE_KEY 用它拼 profile 目录名；不 export 会让
+#  make 侧按 custom1 生成、而某些 python 侧动作按默认 custom0 判定）。
+if [ -n "$FEAT_SPELL" ]; then
+  export EXPANSION_CUSTOM_SPELL_EFFECTS="$FEAT_SPELL"
 fi
 # locale / ROM 尺寸同样 export：scripts/modernize/expansion_config.py 的
 # validate_locale_rom_size() 会读环境变量做「真实 locale 必须 32M」的硬校验。
@@ -267,6 +278,23 @@ if [ "$RESTORE" = "1" ]; then
   git -C "$FRAMEWORK_DIR" checkout HEAD -- . 2>&1 | sed 's/^/      /' | tee -a "$REPORT"
   act "git restore --source=HEAD --staged --worktree ."
   git -C "$FRAMEWORK_DIR" restore --source=HEAD --staged --worktree . 2>&1 | sed 's/^/      /' | tee -a "$REPORT"
+
+  # ★ 2026-09-29 新增：法术特效包是「索引里新增、HEAD 里没有」的文件。
+  #   `git restore --source=HEAD` 只把它们**移出索引**，工作区文件仍在 ⇒ LEFT 非空、
+  #   RESTORE 报"未还原"。必须补两步：① `git reset -q` 出索引；② 按包**定向**删目录。
+  #   ⚠️ 不能整目录 `rm -rf graphics/custom_spell/`：框架自带的
+  #      graphics/custom_spell/reference/ 是**它自己的提交内容**，删了反而不干净。
+  act "git reset -q（清索引中的新增项）"
+  git -C "$FRAMEWORK_DIR" reset -q 2>&1 | sed 's/^/      /' | tee -a "$REPORT"
+  if [ -d "$CONTENT_DIR/assets/spells" ]; then
+    while IFS= read -r pkgdir; do
+      [ -n "$pkgdir" ] || continue
+      pkgrel="graphics/custom_spell/$(basename "$pkgdir")"
+      [ -e "$FRAMEWORK_DIR/$pkgrel" ] || continue
+      act "清除法术特效包工作区目录：$pkgrel/"
+      rm -rf "$FRAMEWORK_DIR/$pkgrel" | sed 's/^/      /' | tee -a "$REPORT"
+    done < <(find "$CONTENT_DIR/assets/spells" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+  fi
 
   LEFT="$(git -C "$FRAMEWORK_DIR" status --porcelain)"
   if [ -z "$LEFT" ]; then
@@ -1025,6 +1053,8 @@ fi
 #   weapontriangle-magic-ring —— 魔法环的【手写参考块】需与三才法环一致，
 #     否则 round-trip 报 6 diagnostics。
 #   shenqi-* —— 神器「不入三环」所需的属性位与三角守卫（见 docs/5 §5.8）。
+#   shanhe-spell-manifest —— 往 assets/manifest.json 追加 M3④ 惊雷引的法术特效记录
+#     （框架要求"清单里声明"，而清单在框架仓库内 ⇒ 只能走补丁；见 docs/5 §5.11）。
 # 形式：unified diff，基线 = framework.lock 钉住的 commit。
 #
 # 幂等：**两阶段** —— ① 先把所有目标文件各还原一次；② 再按文件名顺序 apply。
@@ -1140,10 +1170,68 @@ else
   dim "content/framework-patch/ 无补丁 —— 框架保持只读（正常状态）"
 fi
 
-# ── 3d. assets 提示 ──
-if [ -d "$CONTENT_DIR/assets" ] && [ -n "$(find "$CONTENT_DIR/assets" -type f -not -name '.gitkeep' 2>/dev/null)" ]; then
-  warn "content/assets/ 有文件 —— 资产需按其「拥有缝」登记（见 docs/8），"
-  dim "当前脚本只做提示，不做资产登记（四动词管线：make assets-validate/-generate/-check/-test）"
+# ── 3d. 自定义法术特效资产铺设（M3④；★ 第 4 类已知偏离：会 git add 进框架索引）──
+# 为什么必须 git add（2026-09-29 实测）：
+#   框架的 custom-spell-effect 清单校验要求每个 source 被**框架仓库的 git 追踪** ——
+#   scripts/assets/manifest.py:_validate_tracked_paths() 走的是
+#   `git -C <框架根> ls-files`，看的是**索引**（不是提交树）。
+#   而方案 B 的铺设产物天生是未追踪文件 ⇒ 会被判 "is not a tracked committed source"。
+#   解法：铺完后补一次 `git add`（只动索引、不动内容），并做「追踪数 == 文件数」的终态复核。
+#   详见 docs/5 §5.11。
+SPELL_SRC="$CONTENT_DIR/assets/spells"
+SPELL_DST_REL="graphics/custom_spell"
+SPELL_PKGS="$(find "$SPELL_SRC" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)"
+n_spell_pkgs=$(printf '%s\n' "$SPELL_PKGS" | sed '/^$/d' | wc -l | tr -d ' ')
+if [ "$n_spell_pkgs" -gt 0 ]; then
+  if [ "$DRY_RUN" = "1" ]; then
+    act "[预演] 铺设 $n_spell_pkgs 个法术特效包 → $SPELL_DST_REL/<包名>/ 并 git add 进框架索引"
+    printf '%s\n' "$SPELL_PKGS" | sed 's|^|      → |'
+  else
+    SPELL_N=0
+    while IFS= read -r pkgdir; do
+      [ -n "$pkgdir" ] || continue
+      pkg="$(basename "$pkgdir")"
+      dst="$FRAMEWORK_DIR/$SPELL_DST_REL/$pkg"
+
+      # ① 逐文件**幂等**写入（内容一致不落盘 ⇒ mtime 不动，与 3a/3c 同一纪律）
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        rel="${f#"$pkgdir"/}"
+        mkdir -p "$dst/$(dirname "$rel")"
+        if write_if_changed "$dst/$rel" < "$f"; then
+          dim "法术包 $pkg：写入 $rel"
+        fi
+      done < <(find "$pkgdir" -type f | sort)
+
+      # ② 清掉源里已不存在的框架侧残留（保证"框架侧 == 源"严格一致）
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        rel="${f#"$dst"/}"
+        if [ ! -f "$pkgdir/$rel" ]; then
+          rm -f "$f" && dim "法术包 $pkg：清除残留 $rel"
+        fi
+      done < <(find "$dst" -type f 2>/dev/null)
+
+      # ③ ★ 关键：让框架的 `git ls-files` 认到这些文件（清单校验的硬要求）
+      ( cd "$FRAMEWORK_DIR" && git add -A "$SPELL_DST_REL/$pkg" ) \
+        || die "法术包 $pkg：git add 失败（框架索引不可写）"
+
+      # ④ 终态复核：清单校验真正看的就是 ls-files 的输出
+      n_tracked="$( cd "$FRAMEWORK_DIR" && git ls-files "$SPELL_DST_REL/$pkg" | wc -l | tr -d ' ' )"
+      n_files="$(find "$dst" -type f | wc -l | tr -d ' ')"
+      [ "$n_tracked" = "$n_files" ] \
+        || die "法术包 $pkg：框架侧追踪数 $n_tracked ≠ 文件数 $n_files（清单 sources 校验会失败）"
+      SPELL_N=$((SPELL_N+1))
+    done <<< "$SPELL_PKGS"
+    ok "$SPELL_N 个法术特效包已铺设并登记进框架索引（$SPELL_DST_REL/；追踪数 == 文件数）"
+  fi
+fi
+
+# ── 3d'. 其它资产提示（未接线的资产种类）──
+if [ -d "$CONTENT_DIR/assets" ] \
+   && [ -n "$(find "$CONTENT_DIR/assets" -type f -not -path '*/spells/*' -not -name '.gitkeep' 2>/dev/null)" ]; then
+  warn "content/assets/ 下还有非 spells/ 的资产 —— 需按其「拥有缝」登记（见 docs/8），"
+  dim "当前脚本只铺 spells/（自定义法术特效）；其余仍走四动词管线：make assets-validate/-generate/-check/-test"
 fi
 
 act "铺设完成：合并/铺设 $MERGED_COUNT 项，跳过 $SKIPPED_COUNT 项"
@@ -1542,6 +1630,7 @@ else
         src/data_characters.c|src/data_classes.c|src/data_items.c|src/data_supports.c) ;;  # ★ 预期（B' 回填目标，见 3a'）
         docs/game_locale_text_edits.md) ;;                        # ★ 预期（文本台账，见 3b'）
         fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
+        graphics/custom_spell/*) ;;                               # ★ 预期（法术特效包，见 3d；含 git add 的暂存新增）
         reports/*) ;;                                             # ★ 预期（generated-data 的 inventory/审计报告是 generate 的正常副产物）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)
@@ -1565,7 +1654,7 @@ else
     done < "$CUR"
 
     if [ "$UNEXPECTED" -eq 0 ]; then
-      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、src/shanhe_*.c、Makefile、build/，以及 content/framework-patch/ 声明的全部补丁目标）"
+      ok "反查通过：所有改动都在预期范围内（src/data/、src/data_*.c(回填)、texts/、docs/game_locale_text_edits.md(台账)、fonts/cjk/(字库补丁)、graphics/custom_spell/(法术特效包)、src/shanhe_*.c、Makefile、build/，以及 content/framework-patch/ 声明的全部补丁目标）"
     else
       warn "发现 $UNEXPECTED 项预期外改动 —— 请人工确认是否为手滑直接改了框架"
       dim "如确认是误改：bash tools/shanhe-build.sh RESTORE=1"

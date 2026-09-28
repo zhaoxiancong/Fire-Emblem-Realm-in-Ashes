@@ -1,0 +1,55 @@
+diff --git a/assets/manifest.json b/assets/manifest.json
+index 256c661..9522547 100644
+--- a/assets/manifest.json
++++ b/assets/manifest.json
+@@ -106,6 +106,50 @@
+         "modifications": "formatted-sheet structural migration; runtime components are explicit aliases",
+         "tools": ["python3 standard library"]
+       }
++    },
++    {
++      "id": "CUSTOM_SPELL_JINGLEIYIN",
++      "kind": "custom-spell-effect",
++      "sources": [
++        "graphics/custom_spell/jingleiyin/spell.json",
++        "graphics/custom_spell/jingleiyin/animation.txt",
++        "graphics/custom_spell/jingleiyin/images/jingleiyin_obj_00.png",
++        "graphics/custom_spell/jingleiyin/images/jingleiyin_bg_00.png",
++        "graphics/custom_spell/jingleiyin/images/jingleiyin_obj_01.png",
++        "graphics/custom_spell/jingleiyin/images/jingleiyin_bg_01.png"
++      ],
++      "dependsOn": [],
++      "options": {
++        "importFormat": "feditor-magic-v1",
++        "runtimeAbi": 1,
++        "compression": "lz77"
++      },
++      "ownership": {
++        "seam": "spell-effect-dispatch",
++        "item": "ITEM_ANIMA_FORBLAZE",
++        "effectSymbol": "CUSTOM_SPELL_JINGLEIYIN",
++        "fallbackVanillaEffect": "SASSOC_EFX_Dummy",
++        "spellAssociationSource": "src/spellassoc-data.c"
++      },
++      "resources": {
++        "frames": 2,
++        "totalFrames": 4,
++        "hitFrame": 2,
++        "objBytes": 4096,
++        "bgBytes": 416,
++        "bgTsaBytes": 1200,
++        "objOamEntries": 13,
++        "objPalettes": 1,
++        "bgPalettes": 1,
++        "soundEvents": 1,
++        "romBytes": 3300
++      },
++      "provenance": {
++        "origin": "shanhe project-owned synthetic thunder-chain placeholder (tools/gen-spell-package.py)",
++        "license": "Project source; no external editor patch or ROM data.",
++        "modifications": "M3-4 pipeline proof; replaced by final art later.",
++        "tools": ["Python 3 standard library", "scripts.assets custom-spell-effect v1"]
++      }
+     }
+   ]
+ }

@@ -55,9 +55,19 @@ rom_header_game_code  = BE8E
 #                 ⚠️ 仅现代车道支持；legacy/agbcc 会硬报错（generated_data.mk 已挡）。
 #   mechanics_hooks  链接战斗数值机制钩子注册表（include/expansion_mechanics.h）。
 #                    1 = 允许用 ExpansionMechanicsRegister() 注册原创机制（M3② 本体）。
+#   custom_spell_effects  自定义战斗法术特效（框架 issue #77/#78）。
+#                    1 = 链接 custom-spell-effect 运行时，并发放 assets/manifest.json 里的
+#                        CUSTOM_SPELL_* 记录（M3④ 惊雷引「雷光链」）。
+#                    ⚠️ 这是**永久项目选择**，参与现代构建的**配置指纹**（config identity）。
+#                    ⚠️ 启用后 assets 的 profile 目录由 …-custom0-… 变为 …-custom1-…；
+#                       首次切换会重新生成全部资产并触发一次全量重编（正常）。
+#                    ⚠️ 记录 sources 必须被框架 `git ls-files` 追踪 ⇒ 铺设步骤要 `git add`
+#                       （见 docs/5 §5.11「第 4 类已知偏离」）。
+#                    ⚠️ 仅现代 AAPCS 车道支持；档案车道强制为 0。
 # ------------------------------------------------------------
 item_id_cap      = 0xCE
 mechanics_hooks  = 1
+custom_spell_effects = 1
 # 以下保持框架默认（0 = 不链接框架自带样例，避免污染 ROM）：
 #   EXPANSION_MECHANICS_SAMPLE / EXPANSION_STARTER_CONTENT
 #   —— 本项目用自有机制与自有道具，不链接框架样例。
