@@ -88,6 +88,56 @@
       },
       "reason": "《山河烬》序章台词/旁白（docs/1 §4.3/§4.5）。写成无头像旁白 —— 虞衡立绘槽未定案（docs/9 §3.5）。 有意变更控制码结构，故 preserve_structure=false + sha256 锚定原文。",
       "replacement_text": "史官记曰：云溪镇破。[LF]守鼎人虞衡重伤，[LF]以玉圭与照夜剑付其子。[A]鼎车北去，长兄护之。[LF]职责与家人，[LF]他选了职责。[X]"
+    },
+    "0x0160": {
+      "expected_text": "The Fall of Renais[X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "章节标题（chapter_settings.json chapTitleTextId，texts.txt:## MSG_160）",
+        "source_key": "n/a（该 id 不在本地化目录的映射表里：走 GetStringFromIndex，仅通道 B）"
+      },
+      "reason": "《山河烬》章节标题（docs/1 §4.5）。原为英文章节名，改为中文；走 GetStringFromIndex ⇒ 只需 texts.txt 通道。",
+      "replacement_text": "雪夜云溪[X]"
+    },
+    "0x0161": {
+      "expected_text": "Escape![.][X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "章节标题（chapter_settings.json chapTitleTextId，texts.txt:## MSG_161）",
+        "source_key": "n/a（该 id 不在本地化目录的映射表里：走 GetStringFromIndex，仅通道 B）"
+      },
+      "reason": "《山河烬》章节标题（docs/1 §4.5）。原为英文章节名，改为中文；走 GetStringFromIndex ⇒ 只需 texts.txt 通道。",
+      "replacement_text": "故园烟尘[X]"
+    },
+    "0x0162": {
+      "expected_text": "The Protected[.][X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "章节标题（chapter_settings.json chapTitleTextId，texts.txt:## MSG_162）",
+        "source_key": "n/a（该 id 不在本地化目录的映射表里：走 GetStringFromIndex，仅通道 B）"
+      },
+      "reason": "《山河烬》章节标题（docs/1 §4.5）。原为英文章节名，改为中文；走 GetStringFromIndex ⇒ 只需 texts.txt 通道。",
+      "replacement_text": "山道问路[X]"
+    },
+    "0x0163": {
+      "expected_text": "The Bandits of Borgo[X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "章节标题（chapter_settings.json chapTitleTextId，texts.txt:## MSG_163）",
+        "source_key": "n/a（该 id 不在本地化目录的映射表里：走 GetStringFromIndex，仅通道 B）"
+      },
+      "reason": "《山河烬》章节标题（docs/1 §4.5）。原为英文章节名，改为中文；走 GetStringFromIndex ⇒ 只需 texts.txt 通道。",
+      "replacement_text": "渡口争锋[X]"
+    },
+    "0x0164": {
+      "expected_text": "Ancient Horrors[.][X]",
+      "provenance": {
+        "audit": "shanhe-original-content-2026-09-28",
+        "context": "章节标题（chapter_settings.json chapTitleTextId，texts.txt:## MSG_164）",
+        "source_key": "n/a（该 id 不在本地化目录的映射表里：走 GetStringFromIndex，仅通道 B）"
+      },
+      "reason": "《山河烬》章节标题（docs/1 §4.5）。原为英文章节名，改为中文；走 GetStringFromIndex ⇒ 只需 texts.txt 通道。",
+      "replacement_text": "洛邑风云[X]"
     }
   }
 }
