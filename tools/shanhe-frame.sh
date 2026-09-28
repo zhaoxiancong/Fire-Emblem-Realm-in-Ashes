@@ -15,6 +15,9 @@
 #      FRAME     必填。要取的那一帧。
 #      BASE      可选。按键脚本来源场景，默认 shanhe-boot
 #                （读 content/verify/scenarios/<BASE>.json，只取它的 frames）。
+#                ★ `SCENARIO=` 是它的别名（与 shanhe-verify.sh 的叫法一致 ——
+#                  本工具原先只认 BASE，实测有人（我）按 SCENARIO= 传参被静默忽略，
+#                  结果取了 boot 场景的帧、看到的是另一段画面）。
 #      SCALE     可选。PNG 放大倍数，默认 3（=720x480）。
 #      OUT       可选。PNG 落点，默认 $HOME/shanhe-logs/frames/<BASE>-<FRAME>.png
 #
@@ -55,7 +58,7 @@ done
 unset _arg
 
 FRAME="${FRAME:-}"
-BASE="${BASE:-shanhe-boot}"
+BASE="${BASE:-${SCENARIO:-shanhe-boot}}"   # ★ SCENARIO= 是 BASE= 的别名（见头注释）
 SCALE="${SCALE:-3}"
 [ -n "$FRAME" ] || { printf '\n  \033[0;31m✗\033[0m 必须给 FRAME=<帧号>\n\n' >&2; exit 2; }
 
