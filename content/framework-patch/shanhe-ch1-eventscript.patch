@@ -13,14 +13,13 @@
 #   ③ 结束演出里的 `REVEAL(CHARACTER_SETH)` → `CHARACTER_INNES`（同一原因）。
 #
 # ★ 判据来源（怎么找到这两处 Seth 的）
-#   把本章 `EventScr_Ch1_BeginningScene` 整段抽出来，列出它引用的全部
-#   `CHARACTER_*`，与被替换的那一组上游单位取交集 —— 交集里除主角外的每一个
-#   都是「演出目标会落空」的候选。第 1 章的结果是 {CHARACTER_EIRIKA（我们的主角）、
-#   CHARACTER_SETH}；BREGUET / FRELIAN / SOLDIER_83 属敌方/NPC 组，不受影响。
+#   把本章 `EventScr_Ch1_BeginningScene` 整段抽出来，列出它引用的全部 `CHARACTER_*`，
+#   与被替换的那一组上游单位取交集 —— 交集里除主角外的每一个都是「演出目标会落空」
+#   的候选。第 1 章的结果是 {CHARACTER_EIRIKA（我们的主角）、CHARACTER_SETH}；
+#   BREGUET / FRELIAN / SOLDIER_83 属敌方/NPC 组，不受影响。
 #   （同一手法用在第 3 章找出 CHARACTER_NEIMI，见 shanhe-ch3-eventscript.patch。）
 #
 # 依据: docs/4 §M4 硬门禁 1；docs/1 §4.5「第 1 章 · 故园烟尘」（石阿满护送入队）。
-# 坐标口径见 shanhe-ch1-eventinfo.patch 头注释。
 #
 
 diff --git a/src/events/ch1-eventscript.h b/src/events/ch1-eventscript.h

@@ -3,13 +3,21 @@
 # 目标文件: src/events/ch1-eventinfo.h
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
 #
-# 修什么（2 处，同一文件内）:
-#   ① `.playerUnitsInNormal` / `.playerUnitsInHard` 改指山河烬第 1 章出阵表
-#      `UnitDef_Shanhe01_Ally`（由 content/data/shanhe_01_units.json 生成）。
-#      消费者 src/eventinfo.c:397 `GetChapterAllyUnitDataPointer()`：战前准备画面的
-#      初始站位与「本章我方编制」都读它。
-#   ② `.tutorialEvents` 改指「只有 NULL 哨兵」的新数组 —— 上游第 1 章教学脚本按
-#      Seth / Franz / Gilliam 等**上游角色**写死，换成山河烬的队伍后会错位。
+# 修什么（2 处）:
+#   `.playerUnitsInNormal` / `.playerUnitsInHard` 改指山河烬第 1 章出阵表
+#   `UnitDef_Shanhe01_Ally`（由 content/data/shanhe_01_units.json 生成）。
+#   消费者 src/eventinfo.c:397 `GetChapterAllyUnitDataPointer()`：战前准备画面的初始
+#   站位与「本章我方编制」都读它。
+#
+# ⚠️ `.tutorialEvents` **有意不动**（这一条踩过坑，见下）
+#   最初把 `.tutorialEvents` 改指一个「只有 NULL 哨兵」的新数组，构建报：
+#     expected exactly one EventListScr_Ch2_Tutorial pointer array in
+#     src/events/ch2-eventinfo.h, found 2
+#   根因：上游的 `eventlists` 表把「`EventListScr *` 指针数组」当成**教学链的判据**，
+#   一个文件里出现两个就让校验器崩溃。第 2 章那个文件是**生成器拥有**的（见
+#   shanhe-ch2-eventlists.patch），所以四章统一：教学链留在上游原样。
+#   ⇒ 教学链只在「指引模式」下执行（`CHECK_TUTORIAL` = config.controller==0 且非困难），
+#     正常通关流程不会走到；真要关，第 2 章必须改 JSON，而不是改 C。
 #
 # 依据: docs/4 §M4 硬门禁 1（序章→第 4 章连续通关无阻断）；docs/1 §4.5 第一幕详案；
 #       docs/9 §3.2 角色槽位映射（虞聪=艾莉卡槽、石阿满=伊奈斯槽）。
@@ -40,28 +48,7 @@
 diff --git a/src/events/ch1-eventinfo.h b/src/events/ch1-eventinfo.h
 --- a/src/events/ch1-eventinfo.h
 +++ b/src/events/ch1-eventinfo.h
-@@ -68,6 +68,14 @@
-     NULL
- };
- 
-+/* 山河烬 · 第 1 章教学链（shanhe-ch1-eventinfo.patch 新增）
-+ * 上游第 1 章的教学脚本按 Seth/Franz/Gilliam 等**上游角色**写死，换成山河烬的
-+ * 队伍后会错位。与序章同一处置：给「只有 NULL 哨兵」的数组。
-+ * ⚠️ 消费者 src/eventinfo.c 是一个「循环到 NULL 哨兵为止」的 for 循环（直接解引用）⇒ 不能给 NULL 指针。 */
-+CONST_DATA EventListScr * EventListScr_Shanhe01_Tutorial[] = {
-+    NULL
-+};
-+
- CONST_DATA struct ChapterEventGroup Ch1Events = {
-     .turnBasedEvents               = EventListScr_Ch1_Turn,
-     .characterBasedEvents          = EventListScr_Ch1_Character,
-@@ -76,13 +84,13 @@
-     .specialEventsWhenUnitSelected = EventListScr_Ch1_SelectUnit,
-     .specialEventsWhenDestSelected = EventListScr_Ch1_SelectDestination,
-     .specialEventsAfterUnitMoved   = EventListScr_Ch1_UnitMove,
--    .tutorialEvents                = EventListScr_Ch1_Tutorial,
-+    .tutorialEvents                = EventListScr_Shanhe01_Tutorial,
- 
+@@ -81,8 +81,8 @@
      .traps            = TrapData_Event_Ch1,
      .extraTrapsInHard = TrapData_Event_Ch1Hard,
  

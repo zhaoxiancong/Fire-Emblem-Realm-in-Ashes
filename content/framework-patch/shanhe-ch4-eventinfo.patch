@@ -3,40 +3,19 @@
 # 目标文件: src/events/ch4-eventinfo.h
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
 #
-# 修什么（2 处，同一文件内）:
-#   ① `.playerUnitsInNormal` / `.playerUnitsInHard` 改指 `UnitDef_Shanhe04_Ally`
-#      （本章的队伍分四批入场，见 shanhe-ch4-eventscript.patch；这里给开局那一批）。
-#   ② `.tutorialEvents` 改指「只有 NULL 哨兵」的新数组。
+# 修什么（2 处）:
+#   `.playerUnitsInNormal` / `.playerUnitsInHard` → `UnitDef_Shanhe04_Ally`
+#   （本章队伍分四批入场，见 shanhe-ch4-eventscript.patch；这里给开局那一批）。
+#   `.tutorialEvents` 有意不动（理由见 shanhe-ch1-eventinfo.patch 头注释）。
 #
 # 依据: docs/4 §M4 硬门禁 1（Demo 终点）；docs/1 §4.5「第 4 章 · 洛邑风云」；docs/9 §3.2。
-# 机制与坐标口径同 shanhe-ch1-eventinfo.patch 的头注释。
+# 坐标口径同 shanhe-ch1-eventinfo.patch 头注释。
 #
 
 diff --git a/src/events/ch4-eventinfo.h b/src/events/ch4-eventinfo.h
 --- a/src/events/ch4-eventinfo.h
 +++ b/src/events/ch4-eventinfo.h
-@@ -40,6 +40,14 @@
-     END_MAIN
- };
- 
-+/* 山河烬 · 第 4 章教学链（shanhe-ch4-eventinfo.patch 新增）
-+ * 上游第 4 章的教学脚本按 Seth/Franz/Gilliam 等**上游角色**写死，换成山河烬的
-+ * 队伍后会错位。与序章同一处置：给「只有 NULL 哨兵」的数组。
-+ * ⚠️ 消费者 src/eventinfo.c 是一个「循环到 NULL 哨兵为止」的 for 循环（直接解引用）⇒ 不能给 NULL 指针。 */
-+CONST_DATA EventListScr * EventListScr_Shanhe04_Tutorial[] = {
-+    NULL
-+};
-+
- CONST_DATA struct ChapterEventGroup Ch4Events = {
-     .turnBasedEvents               = EventListScr_Ch4_Turn,
-     .characterBasedEvents          = EventListScr_Ch4_Character,
-@@ -48,13 +56,13 @@
-     .specialEventsWhenUnitSelected = EventListScr_Ch4_SelectUnit,
-     .specialEventsWhenDestSelected = EventListScr_Ch4_SelectDestination,
-     .specialEventsAfterUnitMoved   = EventListScr_Ch4_UnitMove,
--    .tutorialEvents                = EventListScr_Ch4_Tutorial,
-+    .tutorialEvents                = EventListScr_Shanhe04_Tutorial,
- 
+@@ -53,8 +53,8 @@
      .traps            = TrapData_Event_Ch4,
      .extraTrapsInHard = TrapData_Event_Ch4Hard,
  

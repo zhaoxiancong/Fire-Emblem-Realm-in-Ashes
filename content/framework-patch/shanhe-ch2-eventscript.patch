@@ -9,10 +9,10 @@
 # ⚠️ 同场景上方那条 `LOAD1(0x1, UnitDef_Ch2Ally)`（Vanessa 单人）**有意不动**：
 #    它服务于紧随其后的 `CUMO_CHAR(CHARACTER_VANESSA)` 与 `MOVE(0x18,
 #    CHARACTER_VANESSA, 2, 3)` —— 动它会让这两条指令失去目标单位而**卡住演出**。
-#    这条「上游客串角色留着，但只留演出需要的那一个」是本章的最小改动口径。
 #
-# ★ 这也说明一件事：**替换单位组不是纯替换**，必须先把本章演出脚本引用到的角色
-#   全列出来，逐个判断「演出目标会不会落空」。
+# ★ 本文件**不受**生成器管辖（`eventscripts` 表是 metadata-only：只校验
+#   「符号在某个头里被 extern 声明过」，不生成也不重写任何 DSL 正文）。
+#   而 `ch2-eventinfo.h` 就不是这样了 —— 见 shanhe-ch2-eventlists.patch。
 #
 # 依据: docs/4 §M4 硬门禁 1；docs/1 §4.5「第 2 章 · 山道问路」。
 #

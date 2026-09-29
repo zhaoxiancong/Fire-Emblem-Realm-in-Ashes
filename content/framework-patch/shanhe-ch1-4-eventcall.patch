@@ -4,13 +4,14 @@
 # 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
 #
 # 修什么（1 处）:
-#   补 7 条 `UnitDef_Shanhe0N_*` 声明（章节表通道生成，定义在 src/shanhe_0N_udefs.c），
-#   加在既有 `UnitDef_ShanheP_*` 声明之后、`#ifndef EVENTCALL_UDEFS_DATA_OWNER` 保护块内。
+#   补 7 条 `UnitDef_Shanhe0N_*` 声明（章节表通道生成，定义在 src/shanhe_0N_udefs.c）。
 #
-# ★ 为什么必须声明
-#   include/eventcall.h 是本框架的「跨 TU 符号声明中心」：`EventScr_*` 在一处、
-#   `UnitDefinition` 在保护块里。4 章的 chN-eventinfo.h / chN-eventscript.h 都
-#   （直接或经 eventinfo.h）看到这个头 —— 不声明就编译不过。
+# ★★ 插入位置不是随意的（踩过一次）
+#   第一版把这段声明插在 `UnitDef_ShanheP_*` 四条**之后**、`UnitDef_Event_PrologueAlly`
+#   之前 —— 正好落在 shanhe-prologue-eventcall.patch 那个 hunk 的**尾上下文**里，
+#   于是那个补丁既不能正向也不能反向应用，构建直接停在「框架补丁状态无法判定」。
+#   ⇒ 修法：插到序章补丁尾上下文**之后**（`UnitDef_Event_PrologueAlly[]` 那一行之后）。
+#   **教训：往一个被别的补丁改过的文件里插内容，必须避开那个补丁 hunk 的上下文窗口。**
 #
 # ★ 为什么是一个补丁而不是四个
 #   补丁机制是「一个补丁 = 一个目标文件」（脚本按补丁里的目标行取目标，多目标硬拦），
