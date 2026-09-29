@@ -546,8 +546,10 @@ DATA_WRITTEN=0      # 只统计 data/*.json 的**实际写入数**（3a' 的门�
 
 # ── 3a'' 的登记（声明提前到此处：3a 的「不在自动处理名单」warn 要用它）──
 #   详细设计见 3a'' 段与 tools/shanhe-content-tables.sh 头注释 / docs/5 §5.18。
-B3_NEW_DATA="${B3_NEW_DATA:-shanhe_p_units.json}"
-B3_INSTANCES="${B3_INSTANCES:-units:shanhe_p_units.json:src/shanhe_p_udefs.c}"
+# ★ 2026-09-29（T4）：登记面从「序章」扩到「序章 + 第 1~4 章」。
+#   一条实例 = 一个 JSON → 一个自有整文件；同一张 `units` 表可以有多条实例。
+B3_NEW_DATA="${B3_NEW_DATA:-shanhe_p_units.json shanhe_01_units.json shanhe_02_units.json shanhe_03_units.json shanhe_04_units.json}"
+B3_INSTANCES="${B3_INSTANCES:-units:shanhe_p_units.json:src/shanhe_p_udefs.c units:shanhe_01_units.json:src/shanhe_01_udefs.c units:shanhe_02_units.json:src/shanhe_02_udefs.c units:shanhe_03_units.json:src/shanhe_03_udefs.c units:shanhe_04_units.json:src/shanhe_04_udefs.c}"
 
 # ── 3a. data/*.json 按语义合并 ──
 merge_json() {
@@ -843,8 +845,10 @@ fi
 #    「`content/src/*.c` 映射后的集合」比对，不一致就 touch Makefile（重扫 wildcard）。
 #    本通道新增的 `src/shanhe_*.c` **不是** content/src 来的 ⇒ 若不把实例目标并进
 #    3c 的期望集合，会**每一轮都判定"集合有变化"⇒ 每轮全量重编**。已在 3c 处并入。
-B3_NEW_DATA="${B3_NEW_DATA:-shanhe_p_units.json}"
-B3_INSTANCES="${B3_INSTANCES:-units:shanhe_p_units.json:src/shanhe_p_udefs.c}"
+# ★ 2026-09-29（T4）：登记面从「序章」扩到「序章 + 第 1~4 章」。
+#   一条实例 = 一个 JSON → 一个自有整文件；同一张 `units` 表可以有多条实例。
+B3_NEW_DATA="${B3_NEW_DATA:-shanhe_p_units.json shanhe_01_units.json shanhe_02_units.json shanhe_03_units.json shanhe_04_units.json}"
+B3_INSTANCES="${B3_INSTANCES:-units:shanhe_p_units.json:src/shanhe_p_udefs.c units:shanhe_01_units.json:src/shanhe_01_udefs.c units:shanhe_02_units.json:src/shanhe_02_udefs.c units:shanhe_03_units.json:src/shanhe_03_udefs.c units:shanhe_04_units.json:src/shanhe_04_udefs.c}"
 # （B3_NEW_DATA / B3_INSTANCES 的声明见第 3 步开头 —— 提前到那里是因为 3a 的
 #   「不在自动处理名单」warn 需要它）
 if [ "${CONTENT_TABLES:-1}" != "1" ]; then
@@ -1474,6 +1478,71 @@ if [ "$n_icons" -gt 0 ]; then
   fi
 fi
 
+# ── 3f. 章节地图 TMX 铺设（T3；★ 会 git add 进框架索引）──
+# 机制（2026-09-29，框架 docs/tmx_map_layouts.md / Issue #64 `tiled-tmx-map-layout`）：
+#   章节地图走**编译期 TMX 适配器**：`assets/tmx/<名>.tmx` 必须满足 `tmx-safe-v1`
+#   （单图层 `id=1 name="Main"`、CSV 无压缩、内联 tileset
+#     `firstgid=1 name="fe8-metatiles-16px-4096" tilecount=4096 columns=64`、
+#     GID 1..4096 且 `gid-1` = FE8 13 位元瓦片 id、禁对象层/属性/外部 TSX）。
+#   注册面**只有** `assets/manifest.json` 的 `tiled-tmx-map-layout` 记录
+#   （框架原话 "The manifest is the only registration surface"）——
+#   由 `content/framework-patch/shanhe-prologue-map.patch` 提供。
+#   ⚠️ 必须 git add：manifest 的 `sources` 要能被 `git ls-files` 追踪
+#      （与法术包 / 道具图标同一类已知偏离）。
+TMX_SRC="$CONTENT_DIR/assets/tmx"
+TMX_DST_REL="assets/tmx"
+TMX_FILES="$(find "$TMX_SRC" -maxdepth 1 -type f -name '*.tmx' 2>/dev/null | sort)"
+n_tmx=$(printf '%s\n' "$TMX_FILES" | sed '/^$/d' | wc -l | tr -d ' ')
+if [ "$n_tmx" -gt 0 ]; then
+  if [ "$DRY_RUN" = "1" ]; then
+    act "[预演] 铺设 $n_tmx 个章节地图 TMX → $TMX_DST_REL/ 并 git add 进框架索引"
+    printf '%s\n' "$TMX_FILES" | sed 's|^|      → |'
+  else
+    TMX_N=0
+    TMX_CHANGED=0
+    while IFS= read -r ts; do
+      [ -n "$ts" ] || continue
+      base="$(basename "$ts")"
+      if write_if_changed "$FRAMEWORK_DIR/$TMX_DST_REL/$base" < "$ts"; then
+        dim "地图：写入 $base"
+        TMX_CHANGED=1
+      fi
+      ( cd "$FRAMEWORK_DIR" && git add -- "$TMX_DST_REL/$base" ) 2>/dev/null \
+        || die "地图 TMX 无法 git add：$TMX_DST_REL/$base"
+      TMX_N=$((TMX_N+1))
+    done <<< "$TMX_FILES"
+    # ★ TMX 变了就必须重跑框架的资产四动词（2026-09-29 实测踩到）：
+    #   `build/generated/assets/tmx/<id>.mar` 是由 `make assets-generate` 生成的，
+    #   而 `const_data_chapter_maps.c` 里的 `INCBIN_U8` 指向由它转出的 `.bin.lz`。
+    #   只改 TMX 不重跑 ⇒ 内嵌的还是**上一次**的 payload ⇒ 地图看起来没变/花屏。
+    #   框架文档的原话工作流就是「Run make assets-validate assets-generate assets-check
+    #   assets-test, then the supported modern build profile」。
+    #   ⚠️ 跳过 assets-test：它断言的是**未改动的默认 manifest**，我们改 manifest 接入地图
+    #      必然让它红（实测 126 项里 11 失败/3 错误，全部在 test_custom_spell / test_manifest），
+    #      属预期副作用，且它不在构建链上。
+    if [ "$TMX_CHANGED" = "1" ] && [ "$SKIP_BUILD" != "1" ]; then
+      act "地图 TMX 有变化 → 重跑框架资产管线（assets-validate/generate/check）…"
+      if ( cd "$FRAMEWORK_DIR" && make assets-validate assets-generate assets-check \
+             ${MAKE_VARS:+$MAKE_VARS} ) > "$LOG_DIR/assets-$STAMP.log" 2>&1; then
+        ok "地图资产已重新生成（日志：$LOG_DIR/assets-$STAMP.log）"
+      else
+        bad "地图资产重新生成失败"
+        tail -12 "$LOG_DIR/assets-$STAMP.log" | sed 's/^/      /'
+        die "TMX 变更未落地（见上方 make 输出）"
+      fi
+    elif [ "$TMX_CHANGED" = "1" ]; then
+      warn "地图 TMX 有变化，但 SKIP_BUILD=1 ⇒ 跳过资产重新生成（下次完整构建会做）"
+    fi
+    if git -C "$FRAMEWORK_DIR" diff --cached --quiet -- "$TMX_DST_REL"; then
+      dim "地图：$TMX_N 个 TMX 已在框架索引中（内容未变）"
+    else
+      ok "地图：$TMX_N 个 TMX 已铺设并登记进框架索引（$TMX_DST_REL/）"
+    fi
+  fi
+else
+  dim "content/assets/tmx/ 为空 —— 无自绘章节地图（可选）"
+fi
+
 # ── 3d'. 其它资产提示（未接线的资产种类）──
 if [ -d "$CONTENT_DIR/assets" ] \
    && [ -n "$(find "$CONTENT_DIR/assets" -type f -not -path '*/spells/*' -not -path '*/icons/*' -not -name '.gitkeep' 2>/dev/null)" ]; then
@@ -1953,6 +2022,7 @@ else
         fonts/cjk/*|graphics/fonts/cjk/*) ;;                      # ★ 预期（字库补丁，见 3c'）
         graphics/custom_spell/*) ;;                               # ★ 预期（法术特效包，见 3d；含 git add 的暂存新增）
         graphics/item_icon/*) ;;                                  # ★ 预期（原创道具图标 PNG，见 3e；含 git add 的暂存新增；同名 .4bpp 由 make 生成且被 .gitignore 忽略，不进 status）
+        assets/tmx/*) ;;                                          # ★ 预期（章节地图 TMX，见 3f；含 git add 的暂存新增）
         reports/*) ;;                                             # ★ 预期（generated-data 的 inventory/审计报告是 generate 的正常副产物）
         build/*|*/build/*) ;;                                     # 构建产物，正常
         *)

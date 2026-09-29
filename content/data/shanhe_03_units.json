@@ -1,0 +1,81 @@
+{
+  "$schema": "fe8.units.v1",
+  "_comment": "山河烬 第 3 章「渡口争锋」我方出阵表（T4）。坐标照抄被替换的上游组 UnitDef_Event_Ch3Ally 的前 7 个落点（x=0, y=10/11/12）。云虚（第 3 章正式入队）与秦红缨（本章入队）在本章首次进队。",
+  "groups": [
+    {
+      "symbol": "UnitDef_Shanhe03_Ally",
+      "units": [
+        {
+          "charIndex": "CHARACTER_EIRIKA",
+          "classIndex": "CLASS_EIRIKA_LORD",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 4,
+          "xPosition": 0,
+          "yPosition": 11,
+          "redas": [ { "x": 0, "y": 11, "b": 65535 } ],
+          "items": ["ITEM_SWORD_IRON", "ITEM_VULNERARY"]
+        },
+        {
+          "charIndex": "CHARACTER_INNES",
+          "classIndex": "CLASS_SNIPER",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 4,
+          "xPosition": 0,
+          "yPosition": 12,
+          "redas": [ { "x": 0, "y": 12, "b": 65535 } ],
+          "items": ["ITEM_BOW_IRON", "ITEM_VULNERARY"]
+        },
+        {
+          "charIndex": "CHARACTER_ARTUR",
+          "classIndex": "CLASS_MONK",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 3,
+          "xPosition": 0,
+          "yPosition": 10,
+          "redas": [ { "x": 0, "y": 10, "b": 65535 } ],
+          "items": ["ITEM_LIGHT_LIGHTNING", "ITEM_VULNERARY"]
+        },
+        {
+          "charIndex": "CHARACTER_NATASHA",
+          "classIndex": "CLASS_CLERIC",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 3,
+          "xPosition": 0,
+          "yPosition": 12,
+          "redas": [ { "x": 0, "y": 12, "b": 65535 } ],
+          "items": ["ITEM_STAFF_HEAL", "ITEM_STAFF_MEND"]
+        },
+        {
+          "charIndex": "CHARACTER_LARACHEL",
+          "classIndex": "CLASS_TROUBADOUR",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 3,
+          "xPosition": 0,
+          "yPosition": 10,
+          "redas": [ { "x": 0, "y": 10, "b": 65535 } ],
+          "items": ["ITEM_STAFF_HEAL", "ITEM_STAFF_MEND"]
+        },
+        {
+          "charIndex": "CHARACTER_EWAN",
+          "classIndex": "CLASS_PUPIL",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 4,
+          "xPosition": 0,
+          "yPosition": 11,
+          "redas": [ { "x": 0, "y": 11, "b": 65535 } ],
+          "items": ["ITEM_ANIMA_THUNDER", "ITEM_VULNERARY"]
+        },
+        {
+          "charIndex": "CHARACTER_EPHRAIM",
+          "classIndex": "CLASS_EPHRAIM_LORD",
+          "allegiance": "FACTION_ID_BLUE",
+          "level": 4,
+          "xPosition": 0,
+          "yPosition": 10,
+          "redas": [ { "x": 0, "y": 10, "b": 65535 } ],
+          "items": ["ITEM_LANCE_IRON", "ITEM_VULNERARY"]
+        }
+      ]
+    }
+  ]
+}

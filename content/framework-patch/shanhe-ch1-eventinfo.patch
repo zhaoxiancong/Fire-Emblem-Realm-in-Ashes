@@ -1,0 +1,74 @@
+# 山河烬 框架补丁: shanhe-ch1-eventinfo
+#
+# 目标文件: src/events/ch1-eventinfo.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么（2 处，同一文件内）:
+#   ① `.playerUnitsInNormal` / `.playerUnitsInHard` 改指山河烬第 1 章出阵表
+#      `UnitDef_Shanhe01_Ally`（由 content/data/shanhe_01_units.json 生成）。
+#      消费者 src/eventinfo.c:397 `GetChapterAllyUnitDataPointer()`：战前准备画面的
+#      初始站位与「本章我方编制」都读它。
+#   ② `.tutorialEvents` 改指「只有 NULL 哨兵」的新数组 —— 上游第 1 章教学脚本按
+#      Seth / Franz / Gilliam 等**上游角色**写死，换成山河烬的队伍后会错位。
+#
+# 依据: docs/4 §M4 硬门禁 1（序章→第 4 章连续通关无阻断）；docs/1 §4.5 第一幕详案；
+#       docs/9 §3.2 角色槽位映射（虞聪=艾莉卡槽、石阿满=伊奈斯槽）。
+#
+# ★ 为什么必须改框架文件（第 3 类已知偏离）
+#   「事件列表 → 事件脚本 → 单位组」这条链在框架里是**手写头文件**，不是 JSON 表；
+#   只有**单位数据**能走章节表通道（content/data/shanhe_01_units.json →
+#   src/shanhe_01_udefs.c，见 docs/5 §5.18）。「把数据接成可玩」这一刀只能落框架侧。
+#
+# ★ 坐标口径
+#   JSON 里每个单位的落点**照抄被替换的那一组上游单位**（第 1 章 Eirika 与 Seth
+#   同为 14,9，本章照抄）。理由：这些坐标是上游在**本项目未改动的上游地图**上验证过
+#   可站人的格子，照抄即不可能引入「落在不可通行格 / 越界」这类问题。
+#
+# ★ 文本仍是上游 message id（本章开场台词还是原版文本）
+#   山河烬自己的文案走文本通道单独接（新增可见文本走 texts/expansion/；改写已有段
+#   用 indexed_overrides，见 docs/6 §3.4d/§3.4e）。
+#
+# ★ 有意保留（不是遗漏，勿当 bug）
+#   · 上游的 `EventScr_Ch1_*` / `UnitDef_Event_Ch1*` 符号**原样保留**（未引用但仍编译）
+#     —— 不动它们能让 diff 最小、回退成本为 0。
+#   · 本章的敌方组 / NPC 组 / 增援 / 访问点 / 陷阱全部沿用上游 —— 战术骨架不变。
+#
+# 上游若自行引入「每章一个事件组文件」的机制，本补丁可退化为纯数据。
+# 详见 docs/5 §5.18.8。
+#
+
+diff --git a/src/events/ch1-eventinfo.h b/src/events/ch1-eventinfo.h
+--- a/src/events/ch1-eventinfo.h
++++ b/src/events/ch1-eventinfo.h
+@@ -68,6 +68,14 @@
+     NULL
+ };
+ 
++/* 山河烬 · 第 1 章教学链（shanhe-ch1-eventinfo.patch 新增）
++ * 上游第 1 章的教学脚本按 Seth/Franz/Gilliam 等**上游角色**写死，换成山河烬的
++ * 队伍后会错位。与序章同一处置：给「只有 NULL 哨兵」的数组。
++ * ⚠️ 消费者 src/eventinfo.c 是一个「循环到 NULL 哨兵为止」的 for 循环（直接解引用）⇒ 不能给 NULL 指针。 */
++CONST_DATA EventListScr * EventListScr_Shanhe01_Tutorial[] = {
++    NULL
++};
++
+ CONST_DATA struct ChapterEventGroup Ch1Events = {
+     .turnBasedEvents               = EventListScr_Ch1_Turn,
+     .characterBasedEvents          = EventListScr_Ch1_Character,
+@@ -76,13 +84,13 @@
+     .specialEventsWhenUnitSelected = EventListScr_Ch1_SelectUnit,
+     .specialEventsWhenDestSelected = EventListScr_Ch1_SelectDestination,
+     .specialEventsAfterUnitMoved   = EventListScr_Ch1_UnitMove,
+-    .tutorialEvents                = EventListScr_Ch1_Tutorial,
++    .tutorialEvents                = EventListScr_Shanhe01_Tutorial,
+ 
+     .traps            = TrapData_Event_Ch1,
+     .extraTrapsInHard = TrapData_Event_Ch1Hard,
+ 
+-    .playerUnitsInNormal = UnitDef_Event_Ch1Ally,
+-    .playerUnitsInHard   = UnitDef_Event_Ch1Ally,
++    .playerUnitsInNormal = UnitDef_Shanhe01_Ally,
++    .playerUnitsInHard   = UnitDef_Shanhe01_Ally,
+ 
+     .playerUnitsChoice1InEncounter = NULL,
+     .playerUnitsChoice2InEncounter = NULL,

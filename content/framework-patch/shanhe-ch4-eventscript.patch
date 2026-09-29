@@ -1,0 +1,72 @@
+# 山河烬 框架补丁: shanhe-ch4-eventscript
+#
+# 目标文件: src/events/ch4-eventscript.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么（5 处，同一文件内）:
+#   上游本章把队伍拆成**四批入场**，本补丁照抄这个节奏：
+#     ① `UnitDef_Ch4Ally_0`  → `UnitDef_Shanhe04_Ally` （虞聪/石阿满/云虚/秦红缨，开局）
+#     ② `UnitDef_Ch4Ally_1`  → `UnitDef_Shanhe04_Ally1`（温子墨）
+#     ③④ `UnitDef_Ch4Ally_2` → `UnitDef_Shanhe04_Ally2`（婉莹；同串在本文件出现两次）
+#     ⑤ `UnitDef_Ch4Ally_3`  → `UnitDef_Shanhe04_Ally3`（阿蘅）
+#
+# ★ 为什么照抄「四批」而不是把 7 人塞进开局那一组
+#   第 4 章的增援 LOAD 是**对已存在单位**的二次 LOAD 时会把它**传送**到增援落点。
+#   若 7 人全在开局组，则后面的 Ally_1/2/3 会把同一批人反复搬运，且上游
+#   `CUMO_CHAR(CHARACTER_ARTUR)`（温子墨占 ARTUR 槽）这类演出目标会跟着漂。
+#   照抄上游的分批结构 ⇒ 每组角色唯一、演出目标稳定。
+#
+# ⚠️ `CUMO_CHAR(CHARACTER_ARTUR)` / `CUMO_CHAR(CHARACTER_EIRIKA)` **有意不改**：
+#    温子墨占 ARTUR 槽、虞聪占 EIRIKA 槽，两者都仍在场 ⇒ 演出目标有效。
+#
+# 依据: docs/4 §M4 硬门禁 1（Demo 终点）；docs/1 §4.5「第 4 章 · 洛邑风云」。
+#
+
+diff --git a/src/events/ch4-eventscript.h b/src/events/ch4-eventscript.h
+--- a/src/events/ch4-eventscript.h
++++ b/src/events/ch4-eventscript.h
+@@ -10,7 +10,7 @@
+ #include "constants/songs.h"
+ 
+ CONST_DATA EventListScr EventScr_Ch4_BeginningScene[] = {
+-    LOAD2(0x1, UnitDef_Ch4Ally_0)
++    LOAD2(0x1, UnitDef_Shanhe04_Ally)
+     ENUN
+     MUSC(SONG_52)
+     CUMO_CHAR(CHARACTER_EIRIKA)
+@@ -51,7 +51,7 @@
+     CLEAN
+     CAMERA(0, 0)
+     FADU(16)
+-    LOAD1(0x1, UnitDef_Ch4Ally_1)
++    LOAD1(0x1, UnitDef_Shanhe04_Ally1)
+     ENUN
+     CUMO_CHAR(CHARACTER_ARTUR)
+     STAL(60)
+@@ -149,7 +149,7 @@
+     TEXTEND
+     REMA
+     FADI(16)
+-    LOAD1(0x1, UnitDef_Ch4Ally_2)
++    LOAD1(0x1, UnitDef_Shanhe04_Ally2)
+     ENUN
+ LABEL(0xa)
+     MUSC(SONG_INTO_THE_SHADOW_OF_VICTORY)
+@@ -173,7 +173,7 @@
+     CLEA
+     CLEE
+     CLEN
+-    LOAD2(0x1, UnitDef_Ch4Ally_3)
++    LOAD2(0x1, UnitDef_Shanhe04_Ally3)
+     ENUN
+     FADU(16)
+     LOAD1(0x1, UnitDef_Ch4NPC_1)
+@@ -213,7 +213,7 @@
+     Text_BG(BG_NORMAL_VILLAGE, 0x9b3)
+ LABEL(0x2)
+     MURE(0x4)
+-    LOAD1(0x1, UnitDef_Ch4Ally_2)
++    LOAD1(0x1, UnitDef_Shanhe04_Ally2)
+     ENUN
+     EVBIT_T(7)
+     ENDA

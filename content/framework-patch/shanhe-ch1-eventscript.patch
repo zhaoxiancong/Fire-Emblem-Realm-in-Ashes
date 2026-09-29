@@ -1,0 +1,54 @@
+# 山河烬 框架补丁: shanhe-ch1-eventscript
+#
+# 目标文件: src/events/ch1-eventscript.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么（3 处，同一文件内）:
+#   ① `LOAD2(1, UnitDef_Event_Ch1Ally)` → `UnitDef_Shanhe01_Ally`
+#      （虞聪 = 艾莉卡槽；石阿满 = 伊奈斯槽）。这是「数据 → 可玩」的最后一环：
+#      在此之前 UnitDef_Shanhe01_Ally 在 ROM 里但上不了战场。
+#   ② `SVAL(EVT_SLOT_2, CHARACTER_SETH)` → `CHARACTER_INNES`。
+#      紧随其后的 `CALL(EventScr_MoveUnitS2ToLeader)` 会把 slot2 指的角色贴到主角身上；
+#      Seth 已不在我方队伍里，留着它就是给这条指令一个**指向不存在单位的指针**。
+#   ③ 结束演出里的 `REVEAL(CHARACTER_SETH)` → `CHARACTER_INNES`（同一原因）。
+#
+# ★ 判据来源（怎么找到这两处 Seth 的）
+#   把本章 `EventScr_Ch1_BeginningScene` 整段抽出来，列出它引用的全部
+#   `CHARACTER_*`，与被替换的那一组上游单位取交集 —— 交集里除主角外的每一个
+#   都是「演出目标会落空」的候选。第 1 章的结果是 {CHARACTER_EIRIKA（我们的主角）、
+#   CHARACTER_SETH}；BREGUET / FRELIAN / SOLDIER_83 属敌方/NPC 组，不受影响。
+#   （同一手法用在第 3 章找出 CHARACTER_NEIMI，见 shanhe-ch3-eventscript.patch。）
+#
+# 依据: docs/4 §M4 硬门禁 1；docs/1 §4.5「第 1 章 · 故园烟尘」（石阿满护送入队）。
+# 坐标口径见 shanhe-ch1-eventinfo.patch 头注释。
+#
+
+diff --git a/src/events/ch1-eventscript.h b/src/events/ch1-eventscript.h
+--- a/src/events/ch1-eventscript.h
++++ b/src/events/ch1-eventscript.h
+@@ -88,14 +88,14 @@
+     Text_BG(BG_INTERIOR_BLACK, 0x92C)
+     REMA
+ 
+-    LOAD2(1, UnitDef_Event_Ch1Ally)
++    LOAD2(1, UnitDef_Shanhe01_Ally)
+     ENUN
+ 
+     FlashCursor(CHARACTER_EIRIKA, 60)
+ 
+     Text(0x92D)
+ 
+-    SVAL(EVT_SLOT_2, CHARACTER_SETH)
++    SVAL(EVT_SLOT_2, CHARACTER_INNES)
+     CALL(EventScr_MoveUnitS2ToLeader)
+ 
+     SVAL(EVT_SLOT_2, EventScr_Ch1Tut_OnBeginning)
+@@ -179,7 +179,7 @@
+     ENUT(0xC8)
+     ENUT(0xDD)
+ 
+-    REVEAL(CHARACTER_SETH)
++    REVEAL(CHARACTER_INNES)
+     MoveToChapter(0x38)
+     ENDA
+ };

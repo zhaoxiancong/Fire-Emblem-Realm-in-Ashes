@@ -1,0 +1,87 @@
+# 山河烬 框架补丁: shanhe-ch3-eventscript
+#
+# 目标文件: src/events/ch3-eventscript.h
+# 基线提交: ec1dc8553419c8833a687fd8d4a6521a4e29ff7a
+#
+# 修什么（6 处，同一文件内）:
+#   ① `LOAD2(0x1, UnitDef_Event_Ch3Ally)` → `UnitDef_Shanhe03_Ally`（+ 云虚、秦红缨）。
+#   ② 中段的 `LOAD1(0x0, UnitDef_Event_Ch3Ally)`（同一组的重摆位）也改指我们的组。
+#   ③④ 两条 `CUMO_CHAR(CHARACTER_NEIMI)` → `CHARACTER_INNES`。
+#   ⑤⑥ 两条 `MOVE(..., CHARACTER_NEIMI, 3, 9)` → `CHARACTER_INNES`。
+#
+# ★ 为什么 Neimi 必须改（本补丁最值钱的一条）
+#   Neimi 在上游第 3 章的我方组里；我们替换掉那一组之后她就不在场了。
+#   而 `CUMO_CHAR` 对**不存在的单位**会把演出卡死（不是"跳过"，是停在原地）。
+#   所以「替换单位组」的正确做法是：先列出本章演出脚本引用的全部 `CHARACTER_*`，
+#   再与被替换的组取交集 —— 交集里除主角外每个角色都要处理。
+#
+# ⚠️ 有意不改的两处:
+#   · `CHECK_ALIVE(CHARACTER_NEIMI)`（结束演出）—— Neimi 缺席等价于「不在场」，
+#     两个分支都是合法文本，不会卡。
+#   · `FIGHT(CHARACTER_NEIMI, ...)`（在 Colm 的对话事件里）—— Colm 不在我方队伍，
+#     该事件不可达。
+#
+# 依据: docs/4 §M4 硬门禁 1；docs/1 §4.5「第 3 章 · 渡口争锋」（秦红缨入队）。
+#
+
+diff --git a/src/events/ch3-eventscript.h b/src/events/ch3-eventscript.h
+--- a/src/events/ch3-eventscript.h
++++ b/src/events/ch3-eventscript.h
+@@ -24,13 +24,13 @@
+     LOAD1(0x1, UnitDef_Ch3Enemy_0)
+     ENUN
+     FADU(16)
+-    LOAD2(0x1, UnitDef_Event_Ch3Ally)
++    LOAD2(0x1, UnitDef_Shanhe03_Ally)
+     ENUN
+     SVAL(EVT_SLOT_2, EventScr_Ch3_0)
+     CALL(EventScr_CallOnTutorialMode)
+     CHECK_TUTORIAL
+     BNE(0x0, EVT_SLOT_C, EVT_SLOT_0)
+-    CUMO_CHAR(CHARACTER_NEIMI)
++    CUMO_CHAR(CHARACTER_INNES)
+     STAL(60)
+     CURE
+     TEXTSTART
+@@ -43,13 +43,13 @@
+     SVAL(EVT_SLOT_2, 0x2)
+     CALL(EventScr_MoveUnitS2ToLeader)
+     FADI(16)
+-    LOAD1(0x0, UnitDef_Event_Ch3Ally)
++    LOAD1(0x0, UnitDef_Shanhe03_Ally)
+     ENUN
+     CHECK_TUTORIAL
+     BNE(0x1, EVT_SLOT_C, EVT_SLOT_0)
+     GOTO(0x2)
+ LABEL(0x1)
+-    MOVE(0xffff, CHARACTER_NEIMI, 3, 9)
++    MOVE(0xffff, CHARACTER_INNES, 3, 9)
+ LABEL(0x2)
+     CAMERA_CAHR(CHARACTER_BAZBA)
+     FADU(16)
+@@ -176,7 +176,7 @@
+     ENUT(216)
+     ENUT(217)
+     ENUT(198)
+-    REVEAL(CHARACTER_SETH)
++    REVEAL(CHARACTER_INNES)
+     MNCH(0x4)
+     ENDA
+ };
+@@ -280,14 +280,14 @@
+ };
+ 
+ CONST_DATA EventListScr EventScr_Ch3_5[] = {
+-    CUMO_CHAR(CHARACTER_NEIMI)
++    CUMO_CHAR(CHARACTER_INNES)
+     STAL(60)
+     CURE
+     TEXTSTART
+     TEXTSHOW(0x98f)
+     TEXTEND
+     REMA
+-    MOVE(0x0, CHARACTER_NEIMI, 3, 9)
++    MOVE(0x0, CHARACTER_INNES, 3, 9)
+     ENUN
+     SVAL(EVT_SLOT_D, 0x0)
+     SVAL(EVT_SLOT_1, 0x0)
