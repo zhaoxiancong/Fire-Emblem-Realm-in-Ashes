@@ -7,12 +7,14 @@
 
 | 目录 | 放什么 | 铺到框架哪里 | 合并方式 |
 |---|---|---|---|
-| `data/` | 原创 JSON 内容（角色/职业/道具/支援/章节 bundle…） | `src/data/` | ★ **按键/槽位增量合并**，不是文件覆盖 |
+| `data/` | ~~原创 JSON 内容~~ → **已迁移 FEBuilder 链路**（见 `docs/5.开发总SSOT.md`） | — | — |
 | `texts/` | 中文文本 | `texts/` | 合并 + 追加 |
 | `src/` | 原创 C 代码（**统一 `shanhe_` 前缀**） | `src/shanhe_*.c` | 新增文件 |
 | `assets/` | 原创美术/音频/地图资产 | `assets/`、`graphics/`、`sound/` | 按各自拥有缝登记 |
 
-## ⚠️ 写 `data/characters.json` 前必读（2026-09-26 实测）
+> ⚠️ **2026-09-30 架构变更**：数据表（角色/职业/道具/克制/章节单位）已**从 Plan B 的 `content/data/*.json` 迁移到 FEBuilder 主链路**（官方布局 baserom + `--import-data`）。`content/data/` 下原有的自定义 schema JSON 与 `content/src/` 下的配套 C 已全部清理（git tag `before-planb-content-cleanup-20260930`）。数据表格式、命名、制作顺序见 **`docs/5.开发总SSOT.md`**。下方关于 `characters.json` 的说明仅作历史参考，已不适用。
+
+## ⚠️ 写 `data/characters.json` 前必读（历史记录，已不适用）
 
 框架的 `src/data/characters.json` 是 **256 槽全满**的整表，分**两套互斥的键方案**：
 
